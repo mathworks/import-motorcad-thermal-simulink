@@ -1,7 +1,7 @@
 classdef ThermalInterface < mcadinterface.BasicInterface
     %THERMALINTERFACE Motor-CAD interface for thermal modeling workflows.
    
-    % Copyright 2022 The MathWorks, Inc.
+    % Copyright 2022-2023 The MathWorks, Inc.
 
     properties(SetAccess=protected)
         workingDirectory % Working directory
@@ -1069,7 +1069,7 @@ function [array1d, nodeNames] = readMfFile1D(FileName)
     fgetl(fid); % first line not useful
     fgetl(fid); % second line contains number of nodes
     
-    datacell = textscan(fid, '%d%s%f', 'Delimiter',',', 'CollectOutput', 1);
+    datacell = textscan(fid, '%d%s%f', 'Delimiter',';', 'CollectOutput', 1);
 
     nodeNames = datacell{2};     %a cell array of strings
     array1d = datacell{3};    %as a numeric array
@@ -1097,7 +1097,7 @@ function array2d = readMfFile2D(FileName, numNodes)
         formatSpec = [formatSpec, '%f']; %#ok<AGROW> 
     end
     formatSpec = [formatSpec, '%[^\n\r]'];
-    dataArray = textscan(fileID, formatSpec, 'Delimiter', ',', 'TextType', 'string', 'ReturnOnError', false);
+    dataArray = textscan(fileID, formatSpec, 'Delimiter', ';', 'TextType', 'string', 'ReturnOnError', false);
     fclose(fileID);
     
     % Generate the resistace matrix

@@ -4,7 +4,7 @@ classdef (Abstract) AbstractInterface < handle
     % The client interface classes require a mapping of Motor-CAD parameter
     % names to MATLAB parameter names.
     
-    % Copyright 2022 The MathWorks, Inc.
+    % Copyright 2022-2023 The MathWorks, Inc.
     
     properties(Abstract, Constant, Access=protected)
         McadParameterNameList cell % Motor-CAD parameter names list
@@ -22,6 +22,7 @@ classdef (Abstract) AbstractInterface < handle
             % AbstractInterface constructor method
             obj.loadMcad(motFullFile);
             obj.getMcadParameters();
+            obj.setMcadMatrixSeparator();
 
             for idxParam = 1:length(obj.McadParameterNameList)
                 paramName = obj.ParameterNameList{idxParam};
@@ -72,7 +73,10 @@ classdef (Abstract) AbstractInterface < handle
                 obj.McadParameterValuesList{idxParam} = paramValue;
             end
         end
+
+        function setMcadMatrixSeparator(obj)
+            % Set the Motor-CAD MatrixTextSeparator property to ";"
+            invoke(obj.mcad, 'SetVariable',"MatrixTextSeparator",";");
+        end
     end
 end
-
-
