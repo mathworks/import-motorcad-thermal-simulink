@@ -1,5 +1,7 @@
 # **Import a Motor-CAD Thermal Model into Simulink and Simscape**
 
+[![View Import a Motor-CAD Thermal Model into Simulink and Simscape on File Exchange](https://www.mathworks.com/matlabcentral/images/matlab-file-exchange.svg)](https://www.mathworks.com/matlabcentral/fileexchange/120598-import-a-motor-cad-thermal-model-into-simulink-and-simscape) [![Open in MATLAB Online](https://www.mathworks.com/images/responsive/global/open-in-matlab-online.svg)](https://matlab.mathworks.com/open/github/v1?repo=mathworks/import-motorcad-thermal-simulink)
+
 ## Overview
 You can use this project to import an Ansys™ Motor-CAD™ motor model into Simulink®. 
 
