@@ -1,7 +1,7 @@
 classdef tThermalInterface < matlab.unittest.TestCase
     % Tests for mcadinterface.ThermalInterface
 
-    % Copyright 2022 The MathWorks, Inc.
+    % Copyright 2022-2024 The MathWorks, Inc.
     
     properties
         realMotFile = {'data/e5_IM_HWJ.mot'}
@@ -204,6 +204,33 @@ classdef tThermalInterface < matlab.unittest.TestCase
 
         end
 
+        function testAdditionalLossOptions(test)
+            % Verify that the additional loss options (speed and
+            % temperature dependence of losses) can be enabled and disabled
+
+            % Verify set method
+            test.objectUnderTest.Loss_Function_Speed = 1;
+            test.verifyEqual(test.objectUnderTest.Loss_Function_Speed, int32(1));
+
+            test.objectUnderTest.Copper_Losses_Vary_With_Temperature = 1;
+            test.verifyEqual(test.objectUnderTest.Copper_Losses_Vary_With_Temperature, int32(1));
+
+            test.objectUnderTest.RotorCopperLossesVaryWithTemp = 1;
+            test.verifyEqual(test.objectUnderTest.RotorCopperLossesVaryWithTemp, int32(1));
+
+            test.objectUnderTest.StatorIronStrayLoadLossesVaryWithTemp = 1;
+            test.verifyEqual(test.objectUnderTest.StatorIronStrayLoadLossesVaryWithTemp, int32(1));
+
+            test.objectUnderTest.RotorIronStrayLoadLossesVaryWithTemp = 1;
+            test.verifyEqual(test.objectUnderTest.RotorIronStrayLoadLossesVaryWithTemp, int32(1));
+
+            test.objectUnderTest.StatorCopperStrayLoadLossesVaryWithTemp = 1;
+            test.verifyEqual(test.objectUnderTest.StatorCopperStrayLoadLossesVaryWithTemp, int32(1));
+
+            test.objectUnderTest.RotorCopperStrayLoadLossesVaryWithTemp = 1;
+            test.verifyEqual(test.objectUnderTest.RotorCopperStrayLoadLossesVaryWithTemp, int32(1));
+        end
+
         function testGenerateSimulinkReducedOrderModel(test)
             % Test for generateSimulinkReducedOrderModel method.
             % Checks that the generated model data is consistent, and checks
@@ -240,6 +267,22 @@ classdef tThermalInterface < matlab.unittest.TestCase
             test.verifyLessThan(maxTempError222, Ttol, 'Max temperature error is not acceptable for [2,2,2] breakpoints');
 
             bdclose(modelName);
+
+        end
+    end
+
+    % Negative tests for mcadinterface.ThermalInterface
+    methods(Test)
+        function checkErrorWhenFileNotFound(test)
+            invalidMotFilePath = "ThisFileDoesNotExist123abd456FJG";
+            expectedErrorMessage = '.mot file not found on the path. Add the file to the path or use the full file path.';
+            % Try-catch block to capture and verify the error message
+            try
+                test.classUnderTest(invalidMotFilePath);
+                test.verifyFail('Expected an error due to non-existent file, but none was thrown.');
+            catch ME
+                test.verifyEqual(ME.message, expectedErrorMessage);
+            end
 
         end
     end

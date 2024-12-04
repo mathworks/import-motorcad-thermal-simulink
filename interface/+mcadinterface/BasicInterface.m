@@ -37,6 +37,14 @@ classdef BasicInterface < mcadinterface.AbstractInterface
                                  'TorqueDemand_MotorLAB'; ...
                                  'SpeedDemand_MotorLAB'; ...
                                  'Shaft_Speed_[RPM]'; ... 
+                                 ... Additional loss options
+                                 'Loss_Function_Speed'; ...
+                                 'Copper_Losses_Vary_With_Temperature'; ...
+                                 'RotorCopperLossesVaryWithTemp'; ...
+                                 'StatorIronStrayLoadLossesVaryWithTemp'; ...
+                                 'RotorIronStrayLoadLossesVaryWithTemp'; ...
+                                 'StatorCopperStrayLoadLossesVaryWithTemp'; ...
+                                 'RotorCopperStrayLoadLossesVaryWithTemp'; ...
                                  ... Cooling system variables -------
                                  ... Ventilated
                                  'Through_Ventilation'; ...
@@ -109,6 +117,14 @@ classdef BasicInterface < mcadinterface.AbstractInterface
                              'Shaft_Torque_Nm'; ...
                              'Shaft_Speed_RPM'; ...
                              'Shaft_Speed_RPM_Thermal'; ...
+                             ... Additional loss options
+                             'Loss_Function_Speed'; ...
+                             'Copper_Losses_Vary_With_Temperature'; ...
+                             'RotorCopperLossesVaryWithTemp'; ...
+                             'StatorIronStrayLoadLossesVaryWithTemp'; ...
+                             'RotorIronStrayLoadLossesVaryWithTemp'; ...
+                             'StatorCopperStrayLoadLossesVaryWithTemp'; ...
+                             'RotorCopperStrayLoadLossesVaryWithTemp'; ...
                              ... Cooling system variables -----------
                              ... Ventilated
                              'Ventilated_Enable'; ...
@@ -165,6 +181,14 @@ classdef BasicInterface < mcadinterface.AbstractInterface
         ...
         Shaft_Torque_Nm (1,1) double % Shaft torque operating point [Nm]
         Shaft_Speed_RPM (1,1) double % Shaft speed operating point [rpm]
+        ... Additional loss options
+        Loss_Function_Speed (1,1) int32 % Enable speed dependent losses
+        Copper_Losses_Vary_With_Temperature (1,1) int32 % Enable copper loss variation with temperature
+        RotorCopperLossesVaryWithTemp (1,1) int32 % Enable rotor cage losses variation with temperature
+        StatorIronStrayLoadLossesVaryWithTemp (1,1) int32 % Enable stator iron stray load losses variation with temperature
+        RotorIronStrayLoadLossesVaryWithTemp (1,1) int32 % Enable rotor iron stray load losses variation with temperature
+        StatorCopperStrayLoadLossesVaryWithTemp (1,1) int32 % Enable stator copper stray load losses variation with temperature
+        RotorCopperStrayLoadLossesVaryWithTemp (1,1) int32 % Enable rotor copper stray load losses variation with temperature
         ...
         Ventilated_Enable (1,1) int32 % Enable "Ventilated" cooling system
         Ventilated_FlowRate_m3ps (1,1) double % Flow rate (Ventilated) [m3/s]
@@ -269,7 +293,6 @@ classdef BasicInterface < mcadinterface.AbstractInterface
 
         end
     end
-
 
     % Basic set methods
     methods
@@ -402,6 +425,45 @@ classdef BasicInterface < mcadinterface.AbstractInterface
             obj.setParameter('Shaft_Torque_Nm', value);
             obj.Shaft_Torque_Nm = value;
         end
+
+        % --------------
+        function set.Loss_Function_Speed(obj, value)
+            obj.setParameter('Loss_Function_Speed', value);
+            obj.Loss_Function_Speed = value;
+        end
+
+        function set.Copper_Losses_Vary_With_Temperature(obj, value)
+            obj.setParameter('Copper_Losses_Vary_With_Temperature', value);
+            obj.Copper_Losses_Vary_With_Temperature = value;
+        end
+
+        function set.RotorCopperLossesVaryWithTemp(obj, value)
+            obj.setParameter('RotorCopperLossesVaryWithTemp', value);
+            obj.RotorCopperLossesVaryWithTemp = value;
+        end
+
+        function set.StatorIronStrayLoadLossesVaryWithTemp(obj, value)
+            obj.setParameter('StatorIronStrayLoadLossesVaryWithTemp', value);
+            obj.StatorIronStrayLoadLossesVaryWithTemp = value;
+        end
+
+        function set.RotorIronStrayLoadLossesVaryWithTemp(obj, value)
+            obj.setParameter('RotorIronStrayLoadLossesVaryWithTemp', value);
+            obj.RotorIronStrayLoadLossesVaryWithTemp = value;
+        end
+
+        function set.StatorCopperStrayLoadLossesVaryWithTemp(obj, value)
+            obj.setParameter('StatorCopperStrayLoadLossesVaryWithTemp', value);
+            obj.StatorCopperStrayLoadLossesVaryWithTemp = value;
+        end
+
+        function set.RotorCopperStrayLoadLossesVaryWithTemp(obj, value)
+            obj.setParameter('RotorCopperStrayLoadLossesVaryWithTemp', value);
+            obj.RotorCopperStrayLoadLossesVaryWithTemp = value;
+        end
+
+
+        % ---------------
 
         function set.Ventilated_Enable(obj, value)
             obj.setParameter('Ventilated_Enable', value); 

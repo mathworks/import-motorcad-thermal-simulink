@@ -67,12 +67,11 @@ classdef ThermalInterface < mcadinterface.BasicInterface
 
     methods(Access=public)
 
-        function obj = ThermalInterface(motFullFile)
+        function obj = ThermalInterface(motFile)
             % ThermalInterface constructor
-            obj = obj@mcadinterface.BasicInterface(motFullFile);
-            theProject = matlab.project.rootProject;
-            projectRootDir = theProject.RootFolder;
-            obj.workingDirectory = fullfile(projectRootDir, 'data');
+            obj = obj@mcadinterface.BasicInterface(motFile);
+            fullFilePath = which(motFile);
+            obj.workingDirectory = fileparts(fullFilePath); % use same folder as .mot file
             obj.mcadROMLibName = 'mcadROM_lib';
 
             obj.calculateThermalSteadyState(); % initialize node temperatures
@@ -696,11 +695,14 @@ classdef ThermalInterface < mcadinterface.BasicInterface
             % set of state-space models at certain breakpoints (shaft speeds, 
             % coolant flow rates, and coolant inlet temperatures). The ROM
             % interpolates the state-space arrays between breakpoints.
+            
+            obj.turnOffLossDependenceWithTemperatureOrSpeed();
 
             % 1) COMPUTE ROM DATA
             
             % Enable the cooling systems and get the flowrate and inlet
             % temperature property names.
+            disp("Enabling the specified cooling systems...");
             numCoolSys = length(coolingSystemsEnabled);
             frPropNames = cell(numCoolSys,1);
             TinPropNames = cell(numCoolSys,1);
@@ -752,10 +754,13 @@ classdef ThermalInterface < mcadinterface.BasicInterface
             idxsCell = getNestedForLoopIdxs(sizeMatND(1:end-2));
 
             % Calculate state-space matrices for each breakpoint
+            disp("Calculating state-space matrices for each breakpoint...");
             for idxBkptCmb = 1:length(idxsCell)
                 bkptIdxsComb = idxsCell{idxBkptCmb};
                 idxSpeed = bkptIdxsComb(1);
+                disp("Breakpoint #" + num2str(idxBkptCmb));
                 % Set speed
+                disp("  Speed = " + num2str(BkptsStruct.w(idxSpeed)) + " rpm");
                 obj.Shaft_Speed_RPM = BkptsStruct.w(idxSpeed);
                 % Set cooling systems fr and Tin
                 for idxCool = 1:numCoolSys
@@ -764,11 +769,14 @@ classdef ThermalInterface < mcadinterface.BasicInterface
                     idxFr = idxCool+1;
                     idxTin = idxCool+numCoolSys+1;
                     frVal = frBkpts(bkptIdxsComb(idxFr));
-                    TinVal = TinBkpts(bkptIdxsComb(idxTin));
+                    disp("  " + coolingSystemsEnabled{idxCool} + " flow rate = " + frVal + " lpm");
                     obj.(frPropNames{idxCool}) = frVal/60/1000;
+                    TinVal = TinBkpts(bkptIdxsComb(idxTin));
+                    disp("  " + coolingSystemsEnabled{idxCool} +" inlet temperature = " + TinVal + " degC");
                     obj.(TinPropNames{idxCool}) = TinVal;
                 end
-                
+                disp("");
+
                 obj.updateModel();
 
                 % get state-space matrices
@@ -803,6 +811,7 @@ classdef ThermalInterface < mcadinterface.BasicInterface
 
 
             % Get PowerLossDistributor params
+            disp("Estimating power loss distribution for each loss type...")
             lossDistrForEachType = obj.getLossDistrForEachType();
             TrefStator = obj.TrefStator_degC;
             TrefRotor = obj.TrefRotor_degC;
@@ -812,6 +821,7 @@ classdef ThermalInterface < mcadinterface.BasicInterface
             xCapMat = obj.CapMat;
 
             % 2) GENERATE SIMULINK MODEL
+            disp("Creating Simulink model...")
             % create and open the model
             open_system(new_system(modelName));
             set_param(modelName, 'StopTime', '1000');
@@ -998,6 +1008,47 @@ classdef ThermalInterface < mcadinterface.BasicInterface
             lossVec = residualLossVal*ones(size(obj.LossValues)); 
             
             obj.runThermalSteadyStateWithSpecifiedLosses(lossVec)
+
+        end
+
+        function turnOffLossDependenceWithTemperatureOrSpeed(obj)
+            % Disable loss dependence on speed and temperature. This is
+            % required to correctly estimate the loss distribution amongst
+            % nodes.
+            if obj.Loss_Function_Speed==int32(1)
+                warning("Turning off 'Copper Losses Vary with Temperature'. This is required to correctly estimate the loss distribution amongst nodes.")
+                obj.Loss_Function_Speed = 0;
+            end
+
+            if obj.Copper_Losses_Vary_With_Temperature==int32(1)
+                warning("Turning off 'Copper Losses Vary with Temperature'. This is required to correctly estimate the loss distribution amongst nodes.")
+                obj.Copper_Losses_Vary_With_Temperature = 0;
+            end
+
+            if obj.RotorCopperLossesVaryWithTemp==int32(1)
+                warning("Turning off 'Rotor Cage Losses Vary with Temperature'. This is required to correctly estimate the loss distribution amongst nodes.")
+                obj.RotorCopperLossesVaryWithTemp = 0;
+            end
+
+            if obj.StatorIronStrayLoadLossesVaryWithTemp==int32(1)
+                warning("Turning off 'Stator Iron Stray Losses Vary with Temperature'. This is required to correctly estimate the loss distribution amongst nodes.")
+                obj.StatorIronStrayLoadLossesVaryWithTemp = 0;
+            end
+
+            if obj.RotorIronStrayLoadLossesVaryWithTemp==int32(1)
+                warning("Turning off 'Rotor Iron Stray Losses Vary with Temperature'. This is required to correctly estimate the loss distribution amongst nodes.")
+                obj.RotorIronStrayLoadLossesVaryWithTemp = 0;
+            end
+
+            if obj.StatorCopperStrayLoadLossesVaryWithTemp==int32(1)
+                warning("Turning off 'Stator Copper Stray Losses Vary with Temperature'. This is required to correctly estimate the loss distribution amongst nodes.")
+                obj.StatorCopperStrayLoadLossesVaryWithTemp = 0;
+            end
+
+            if obj.RotorCopperStrayLoadLossesVaryWithTemp==int32(1)
+                warning("Turning off 'Rotor Copper Stray Losses Vary with Temperature'. This is required to correctly estimate the loss distribution amongst nodes.")
+                obj.RotorCopperStrayLoadLossesVaryWithTemp = 0;
+            end
 
         end
     end

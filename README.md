@@ -43,12 +43,12 @@ Open the project file *ImportMotorCADThermalModel.prj* to get started.
 
 ### MathWorks Products (http://www.mathworks.com)
 Requires MATLAB® release R2021b or newer.
-- [Simulink™](https://www.mathworks.com/products/simulink.html)
-- [Simscape™](https://www.mathworks.com/products/simscape.html)
-- [Simscape™ Electrical™](https://www.mathworks.com/products/simscape-electrical.html)
-- [Simscape™ Fluids™](https://www.mathworks.com/products/simscape-fluids.html)
-- [Control System Toolbox™](https://www.mathworks.com/products/control.html)
-- [Motor Control Blockset™](https://www.mathworks.com/products/motor-control.html)
+- [Simulink™](https://www.mathworks.com/products/simulink.html) - required.
+- [Simscape™](https://www.mathworks.com/products/simscape.html) - optional.
+- [Simscape™ Electrical™](https://www.mathworks.com/products/simscape-electrical.html) - optional.
+- [Simscape™ Fluids™](https://www.mathworks.com/products/simscape-fluids.html) - optional.
+- [Control System Toolbox™](https://www.mathworks.com/products/control.html) - required (LPV System block).
+- [Motor Control Blockset™](https://www.mathworks.com/products/motor-control.html) - optional (Drive Cycle Source block).
 
 ### Getting Started 
 To learn more about modeling and simulation with Simscape™, please visit:

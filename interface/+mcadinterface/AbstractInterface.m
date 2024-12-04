@@ -55,7 +55,19 @@ classdef (Abstract) AbstractInterface < handle
             if ~isfile(motFullFile)
                 error('.mot file not found on the path. Add the file to the path or use the full file path.');
             end
-            obj.mcad = actxserver('MotorCAD.AppAutomation');
+            try
+                obj.mcad = actxserver('MotorCAD.AppAutomation');
+            catch theException
+                % Construct a combined error message
+                combinedErrorMessage = "MATLAB is unable to connect to the Motor-CAD ActiveX automation server. " + ...
+                                               "Ensure you opened the .mot file with 'Visual Basic' selected " + ...
+                                               "as Scripting Engine option." + newline + ...
+                                               "Root cause error: " + newline + ...
+                                               "Error ID: " + theException.identifier + newline + ...
+                                               "Error Message: " + theException.message;
+                % Throw a new error with the combined message
+                error(combinedErrorMessage);
+            end
             invoke(obj.mcad, 'SetVariable',"MessageDisplayState",2); % avoid pop-up windows
             invoke(obj.mcad,'LoadFromFile',motFullFile);
             invoke(obj.mcad,'DisplayScreen','Scripting');
