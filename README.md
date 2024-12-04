@@ -4,6 +4,8 @@
 
 ## Overview
 You can use this project to import an Ansys™ Motor-CAD™ motor model into Simulink®. 
+This version of the project is intended for versions of Motor-CAD that use the Visual Basic (ActiveX) interface.
+For newer Motor-CAD versions, such as 2023R1 or newer, which use the PyMotorCAD interface, use a newer version. See all versions in [GitHub Releases](https://github.com/mathworks/import-motorcad-thermal-simulink/releases).
 
 You can use the automatically-generated Simulink model to:
  * Predict the transient temperature of the motor elements under dynamic operating points and diverse cooling scenarios. 
