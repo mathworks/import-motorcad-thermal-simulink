@@ -4,7 +4,7 @@ classdef (Abstract) AbstractInterface < handle
     % The client interface classes require a mapping of Motor-CAD parameter
     % names to MATLAB parameter names.
     
-    % Copyright 2022-2023 The MathWorks, Inc.
+    % Copyright 2022-2024 The MathWorks, Inc.
     
     properties(Abstract, Constant, Access=protected)
         McadParameterNameList cell % Motor-CAD parameter names list
@@ -36,14 +36,26 @@ classdef (Abstract) AbstractInterface < handle
             idxParam = strcmp(obj.ParameterNameList, paramName);
             obj.McadParameterValuesList{idxParam} = paramValue;
             mcadParameterName = obj.McadParameterNameList{idxParam};
-            invoke(obj.mcad,'DisplayScreen','Scripting');
-            invoke(obj.mcad, 'SetVariable', mcadParameterName, paramValue);
+            obj.mcad.display_screen('Scripting');
+            obj.mcad.set_variable(mcadParameterName, paramValue);
         end
         
         function paramValue = getParameter(obj,paramName)
             % Get parameter value from Motor-CAD
             idxParam = strcmp(obj.ParameterNameList, paramName);
             paramValue = obj.McadParameterValuesList{idxParam};
+        end
+
+        function delete(obj)
+            % Destructor method to close the Motor-CAD instance before
+            % deleting the object
+            if ~isempty(obj.mcad)
+                try
+                    obj.mcad.quit();
+                catch
+                    warning('Failed to close the Motor-CAD instance on cleanup.');
+                end
+            end
         end
     end
 
@@ -55,40 +67,51 @@ classdef (Abstract) AbstractInterface < handle
             if ~isfile(motFullFile)
                 error('.mot file not found on the path. Add the file to the path or use the full file path.');
             end
+
             try
-                obj.mcad = actxserver('MotorCAD.AppAutomation');
+                pymotorcad = py.importlib.import_module('ansys.motorcad.core');
             catch theException
-                % Construct a combined error message
-                combinedErrorMessage = "MATLAB is unable to connect to the Motor-CAD ActiveX automation server. " + ...
-                                               "Ensure you opened the .mot file with 'Visual Basic' selected " + ...
-                                               "as Scripting Engine option." + newline + ...
-                                               "Root cause error: " + newline + ...
-                                               "Error ID: " + theException.identifier + newline + ...
-                                               "Error Message: " + theException.message;
+                % Define a clickable hyperlink for the "PyMotorCAD scripting in MATLAB" page
+                url1 = "https://motorcad.docs.pyansys.com/version/stable/user_guide/matlab_scripting.html";
+                linkText1 = "PyMotorCAD scripting in MATLAB";
+                % Define a clickable hyperlink for the "Versions of Python Compatible with MATLAB Products by Release" page
+                url2 = "https://www.mathworks.com/support/requirements/python-compatibility.html";
+                linkText2 = "Versions of Python Compatible with MATLAB Products by Release";
+            
+                % Construct the combined error message with a clickable hyperlink
+                combinedErrorMessage = ...
+                    "MATLAB is unable to connect to the PyMotorCAD interface. " + ...
+                    "Ensure a compatible Python version is installed and " + ...
+                    "the ansys.motorcad.core module is installed." + newline + ...
+                    "For more information, see " + ...
+                    "<a href=""" + url1 + """>" + linkText1 + "</a>" + " and " + ...
+                    "<a href=""" + url2 + """>" + linkText2 + "</a>." + newline + ...
+                    "Root cause error:" + newline + ...
+                    "Error ID: " + theException.identifier + newline + ...
+                    "Error Message: " + theException.message;
+            
                 % Throw a new error with the combined message
                 error(combinedErrorMessage);
             end
-            invoke(obj.mcad, 'SetVariable',"MessageDisplayState",2); % avoid pop-up windows
-            invoke(obj.mcad,'LoadFromFile',motFullFile);
-            invoke(obj.mcad,'DisplayScreen','Scripting');
+
+            obj.mcad = pymotorcad.MotorCAD();
+            obj.mcad.set_variable('MessageDisplayState',2); % avoid pop-up windows
+            obj.mcad.load_from_file(motFullFile);
+            obj.mcad.display_screen('Scripting');
         end
 
         function getMcadParameters(obj)
             % Get all Motor-CAD parameters in the McadParameterNameList
             for idxParam = 1:length(obj.McadParameterNameList)
                 paramName = obj.McadParameterNameList{idxParam};
-                [success, paramValue] = invoke(obj.mcad, 'GetVariable', paramName);
-                if success ~= 0
-                    warn('GetVariable failed')
-                    paramValue = NaN;
-                end
-                obj.McadParameterValuesList{idxParam} = paramValue;
+                paramValue = obj.mcad.get_variable(paramName);
+                obj.McadParameterValuesList{idxParam} = double(paramValue);
             end
         end
 
         function setMcadMatrixSeparator(obj)
             % Set the Motor-CAD MatrixTextSeparator property to ";"
-            invoke(obj.mcad, 'SetVariable',"MatrixTextSeparator",";");
+            obj.mcad.set_variable("MatrixTextSeparator",";");
         end
     end
 end

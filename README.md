@@ -11,6 +11,11 @@ You can use the automatically-generated Simulink model to:
  * Integrate the motor in a system-level model using Simscape™.
  * Analize the performance of your system design in a holistic way.
 
+This project is compatible with MATLAB R2021b or newer, and with multiple versions of Motor-CAD.
+**Use the links below to download the latest version, depending on your Motor-CAD version:**
+- For Motor-CAD 2024R2 or newer (with PyMotorCAD interface): Use Download button above
+- For Motor-CAD 15.1.6 or newer (with Visual Basic ActiveX interface): [MotorCAD_v15.1.6.zip](https://github.com/mathworks/import-motorcad-thermal-simulink/archive/refs/tags/MotorCAD_v15.1.6.zip)
+
 ## 1. Import a Motor-CAD model into MATLAB ##
 You can use the Object-Oriented MATLAB® - Motor-CAD interface (included in this repository) to import a Motor-CAD model into MATLAB and easily modify motor properties and run Motor-CAD calculations.
 
@@ -60,4 +65,4 @@ The license is available in the License file within this repository.
 ## Community Support
 [MATLAB Central](https://www.mathworks.com/matlabcentral)
 
-Copyright 2022 The MathWorks, Inc.
+Copyright 2022-2024 The MathWorks, Inc.

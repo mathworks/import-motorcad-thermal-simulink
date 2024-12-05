@@ -97,17 +97,17 @@ classdef ThermalInterface < mcadinterface.BasicInterface
         % Basic MotorCAD thermal commands ---------
         function calculateLabOperatingPoint(obj)
             % Calculate Lab Operating Point
-            invoke(obj.mcad, 'CalculateOperatingPoint_Lab');
+            obj.mcad.calculate_operating_point_lab();
         end
 
         function calculateThermalSteadyState(obj)
             % Calculate thermal steady state
-            invoke(obj.mcad, 'DoSteadyStateAnalysis');
+            obj.mcad.do_steady_state_analysis();
         end
 
         function calculateThermalTransient(obj)
             % Calculate thermal transient
-            invoke(obj.mcad, 'DoTransientAnalysis');
+            obj.mcad.do_transient_analysis();
         end
 
         function runThermalSteadyStateWithSpecifiedLosses(obj, lossVec)
@@ -179,7 +179,7 @@ classdef ThermalInterface < mcadinterface.BasicInterface
         function writeThermalStateSpaceFiles(obj)
             % Export thermal matrices into text files (.cmf, .rmf, .pmf,
             % .tmf, .nmf)
-            invoke(obj.mcad,'ExportMatrices', obj.workingDirectory);
+            obj.mcad.export_matrices(obj.workingDirectory);
         end
 
         function [CapMat, ResMat, PowMat, TempMat, NodeNames] = getThermalStateSpaceMatricesFromFiles(obj)
@@ -326,12 +326,8 @@ classdef ThermalInterface < mcadinterface.BasicInterface
 
             TnodesVec = nan(length(mcadIdxs), 1);
             for idxNode = 1:length(mcadIdxs)
-                [success, Tval] = invoke(obj.mcad, 'GetNodeTemperature', mcadIdxs(idxNode));
-                if success ~=0
-                    warning('Failure in GetNodeTemperature');
-                else
-                    TnodesVec(idxNode) = Tval;
-                end
+                Tval = obj.mcad.get_node_temperature(int32(mcadIdxs(idxNode)));
+                TnodesVec(idxNode) = double(Tval);
             end
         end
 
@@ -341,12 +337,9 @@ classdef ThermalInterface < mcadinterface.BasicInterface
 
             PnodesVec = nan(length(mcadIdxs), 1);
             for idxNode = 1:length(mcadIdxs)
-                [success, Tval] = invoke(obj.mcad, 'GetNodePower', mcadIdxs(idxNode));
-                if success ~=0
-                    warning('Failure in GetNodePower');
-                else
-                    PnodesVec(idxNode) = Tval;
-                end
+                Pval = obj.mcad.get_node_power(int32(mcadIdxs(idxNode)));
+                PnodesVec(idxNode) = double(Pval);
+
             end
         end
 
@@ -354,17 +347,18 @@ classdef ThermalInterface < mcadinterface.BasicInterface
             % Get transient temperature time series for a list of nodes specified by
             % the Motor-CAD indices.
 
-            [~, numTimePoints] = invoke(obj.mcad, 'GetVariable', 'Simple_Transient_Number_Points');
+            numTimePoints = double(obj.mcad.get_variable('Simple_Transient_Number_Points'));
             numTimePoints = numTimePoints+1; % include initial time
             TnodesVec = nan(length(mcadIdxs), numTimePoints);
             tVec = nan(1,numTimePoints);
             for idxNode = 1:length(mcadIdxs)
                 for idxTime = 1:numTimePoints
-                    [success,x,y] = invoke(obj.mcad,'GetTemperatureGraphPoint',mcadIdxs(idxNode),idxTime-1);
-                    if success == 0 
-                        tVec(idxTime) = x;
-                        TnodesVec(idxNode, idxTime) = y;
-                    end
+                    tuple = obj.mcad.get_temperature_graph_point(int32(mcadIdxs(idxNode)),int32(idxTime-1));
+                    tuple = cell(tuple);
+                    x = double(tuple{1});
+                    y = double(tuple{2});
+                    tVec(idxTime) = x;
+                    TnodesVec(idxNode, idxTime) = y;
                 end
             end
         end
@@ -373,17 +367,18 @@ classdef ThermalInterface < mcadinterface.BasicInterface
             % Get transient power time series for a list of nodes specified by
             % the Motor-CAD indices.
 
-            [~, numTimePoints] = invoke(obj.mcad, 'GetVariable', 'Simple_Transient_Number_Points');
+            numTimePoints = double(obj.mcad.get_variable('Simple_Transient_Number_Points'));
             numTimePoints = numTimePoints+1; % include initial time
             PnodesVec = nan(length(mcadIdxs), numTimePoints);
             tVec = nan(1,numTimePoints);
             for idxNode = 1:length(mcadIdxs)
                 for idxTime = 1:numTimePoints
-                    [success,x,y] = invoke(obj.mcad,'GetPowerGraphPoint',mcadIdxs(idxNode),idxTime-1);
-                    if success == 0 
-                        tVec(idxTime) = x;
-                        PnodesVec(idxNode, idxTime) = y;
-                    end
+                    tuple = obj.mcad.get_power_graph_point(int32(mcadIdxs(idxNode)),int32(idxTime-1));
+                    tuple = cell(tuple);
+                    x = double(tuple{1});
+                    y = double(tuple{2});
+                    tVec(idxTime) = x;
+                    PnodesVec(idxNode, idxTime) = y;
                 end
             end
             PnodesVec(1,:) = 0; 
@@ -412,8 +407,8 @@ classdef ThermalInterface < mcadinterface.BasicInterface
         function calculateMagneticLab(obj)
             % Calculate magnetic lab
 
-            invoke(obj.mcad, 'CalculateMagnetic_Lab'); 
-            % CalculateMagnetic_Lab uses the existing pre-built magnetic
+            obj.mcad.calculate_magnetic_lab()
+            % calculate_magnetic_lab uses the existing pre-built magnetic
             % lab (from a previous call to BuildModel_Lab)
         end
 
