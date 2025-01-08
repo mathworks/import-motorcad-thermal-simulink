@@ -111,7 +111,7 @@ classdef (Abstract) AbstractInterface < handle
 
         function setMcadMatrixSeparator(obj)
             % Set the Motor-CAD MatrixTextSeparator property to ";"
-            obj.mcad.set_variable("MatrixTextSeparator",";");
+            obj.mcad.set_variable("MatrixTextSeparator",";"); % note: named ExportTextSeparator in v2024.2
         end
     end
 end
