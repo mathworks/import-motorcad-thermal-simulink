@@ -1,7 +1,7 @@
 classdef tThermalInterface < matlab.unittest.TestCase
     % Tests for mcadinterface.ThermalInterface
 
-    % Copyright 2022-2024 The MathWorks, Inc.
+    % Copyright 2022-2025 The MathWorks, Inc.
     
     properties
         realMotFile = {'data/e5_IM_HWJ.mot'}
@@ -45,7 +45,7 @@ classdef tThermalInterface < matlab.unittest.TestCase
             % Unit test for runThermalSteadyStateWithSpecifiedLosses method
             % Checks that the TnodesVec output has the expected size.
 
-            lossVec = transpose(1:16); % [W]
+            lossVec = transpose(1:24); % [W]
             test.objectUnderTest.runThermalSteadyStateWithSpecifiedLosses(lossVec);
 
             % Consistency check
@@ -78,7 +78,7 @@ classdef tThermalInterface < matlab.unittest.TestCase
             % Unit test for runThermalTransientWithSpecifiedLosses method
             % Checks that the TnodesVecMcad output has the expected size.
 
-            lossVec = 30*ones(16,1);
+            lossVec = 30*ones(24,1);
             test.objectUnderTest.EnableStatorTempCoeffRes = 1;
             test.objectUnderTest.EnableRotorTempCoeffRes = 1;
             stopTime = 500;
