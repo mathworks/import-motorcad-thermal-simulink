@@ -1,7 +1,7 @@
 classdef ThermalInterface < mcadinterface.BasicInterface
     %THERMALINTERFACE Motor-CAD interface for thermal modeling workflows.
    
-    % Copyright 2022-2023 The MathWorks, Inc.
+    % Copyright 2022-2025 The MathWorks, Inc.
 
     properties(SetAccess=protected)
         workingDirectory % Working directory
@@ -29,6 +29,9 @@ classdef ThermalInterface < mcadinterface.BasicInterface
         Iron_Loss_Rotor_Tooth_Mat (:,:) double % Rotor tooth iron loss map [W]
         Friction_Loss_Mat (:,:) double % Friction loss map [W]
         Windage_Loss_Mat (:,:) double % Windage loss map [W]
+        Stator_Copper_Loss_AC_Mat (:,:) double % Stator copper AC loss map [W]
+        Banding_Loss_Mat (:,:) double % Banding loss map [W]
+        Sleeve_Loss_Mat (:,:) double % Windage loss map [W]
 
         % Thermal matrices
 
@@ -481,6 +484,21 @@ classdef ThermalInterface < mcadinterface.BasicInterface
             else % this machine type does not include this loss type
                 Windage_Loss = zeros(size(Speed));
             end
+            if isfield(outLoad, 'Stator_Copper_Loss_AC')
+                Stator_Copper_Loss_AC = outLoad.Stator_Copper_Loss_AC;
+            else % this machine type does not include this loss type
+                Stator_Copper_Loss_AC = zeros(size(Speed));
+            end
+            if isfield(outLoad, 'Banding_Loss')
+                Banding_Loss = outLoad.Banding_Loss;
+            else % this machine type does not include this loss type
+                Banding_Loss = zeros(size(Speed));
+            end
+            if isfield(outLoad, 'Sleeve_Loss')
+                Sleeve_Loss = outLoad.Sleeve_Loss;
+            else % this machine type does not include this loss type
+                Sleeve_Loss = zeros(size(Speed));
+            end
 
             obj.Speed_Mat = Speed;
             obj.Shaft_Torque_Mat = Shaft_Torque;
@@ -495,6 +513,9 @@ classdef ThermalInterface < mcadinterface.BasicInterface
             obj.Iron_Loss_Rotor_Tooth_Mat = Iron_Loss_Rotor_Tooth;
             obj.Friction_Loss_Mat = Friction_Loss;
             obj.Windage_Loss_Mat = Windage_Loss;
+            obj.Stator_Copper_Loss_AC_Mat = Stator_Copper_Loss_AC;
+            obj.Banding_Loss_Mat = Banding_Loss;
+            obj.Sleeve_Loss_Mat = Sleeve_Loss;
     
         end
 
@@ -803,6 +824,9 @@ classdef ThermalInterface < mcadinterface.BasicInterface
             [~,~,xIron_Loss_Rotor_Tooth_Mat] = reInterpolateTable(obj.Shaft_Torque_Mat, obj.Speed_Mat, obj.Iron_Loss_Rotor_Tooth_Mat);
             [~,~,xFriction_Loss_Mat] = reInterpolateTable(obj.Shaft_Torque_Mat, obj.Speed_Mat, obj.Friction_Loss_Mat);
             [~,~,xWindage_Loss_Mat] = reInterpolateTable(obj.Shaft_Torque_Mat, obj.Speed_Mat, obj.Windage_Loss_Mat);  
+            [~,~,xStator_Copper_Loss_AC_Mat] = reInterpolateTable(obj.Shaft_Torque_Mat, obj.Speed_Mat, obj.Stator_Copper_Loss_AC_Mat);  
+            [~,~,xBanding_Loss_Mat] = reInterpolateTable(obj.Shaft_Torque_Mat, obj.Speed_Mat, obj.Banding_Loss_Mat);  
+            [~,~,xSleeve_Loss_Mat] = reInterpolateTable(obj.Shaft_Torque_Mat, obj.Speed_Mat, obj.Sleeve_Loss_Mat);  
 
 
             % Get PowerLossDistributor params
@@ -843,7 +867,10 @@ classdef ThermalInterface < mcadinterface.BasicInterface
                 'Iron_Loss_Rotor_Back_Iron_Mat', 'Iron_Loss_Rotor_Back_Iron_Mat', ...
                 'Iron_Loss_Rotor_Tooth_Mat', 'Iron_Loss_Rotor_Tooth_Mat', ...
                 'Friction_Loss_Mat', 'Friction_Loss_Mat', ...
-                'Windage_Loss_Mat', 'Windage_Loss_Mat' ...
+                'Windage_Loss_Mat', 'Windage_Loss_Mat', ...
+                'Stator_Copper_Loss_AC_Mat', 'Stator_Copper_Loss_AC_Mat', ...
+                'Banding_Loss_Mat', 'Banding_Loss_Mat', ...
+                'Sleeve_Loss_Mat', 'Sleeve_Loss_Mat' ...
                 );
             hInTorque = add_block('simulink/Commonly Used Blocks/In1', strcat(romSubsysPath, '/ShaftTorque_Nm'));
             hInSpeed = add_block('simulink/Commonly Used Blocks/In1', strcat(romSubsysPath, '/ShaftSpeed_RPM')); 
@@ -943,6 +970,9 @@ classdef ThermalInterface < mcadinterface.BasicInterface
             assignin(mdlWks,'Iron_Loss_Rotor_Tooth_Mat', xIron_Loss_Rotor_Tooth_Mat);
             assignin(mdlWks,'Friction_Loss_Mat', xFriction_Loss_Mat);
             assignin(mdlWks,'Windage_Loss_Mat', xWindage_Loss_Mat);
+            assignin(mdlWks,'Stator_Copper_Loss_AC_Mat', xStator_Copper_Loss_AC_Mat);
+            assignin(mdlWks,'Banding_Loss_Mat', xBanding_Loss_Mat);
+            assignin(mdlWks,'Sleeve_Loss_Mat', xSleeve_Loss_Mat);
             assignin(mdlWks,'TrefStator', TrefStator);
             assignin(mdlWks,'TrefRotor', TrefRotor);
             assignin(mdlWks,'StatorCopperTempCoefResistivity', xStatorCopperTempCoefResistivity);
