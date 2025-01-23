@@ -231,6 +231,62 @@ classdef tThermalInterface < matlab.unittest.TestCase
             test.verifyEqual(test.objectUnderTest.RotorCopperStrayLoadLossesVaryWithTemp, int32(1));
         end
 
+        function testSprayCoolingMultiNozzleOptions(test)
+            % Verify that the multi-nozzle spray cooling options can be enabled and disabled
+        
+            % Verify set methods for SprayCoolingNozzleDefinition
+            test.objectUnderTest.SprayCoolingNozzleDefinition = 1;
+            test.verifyEqual(test.objectUnderTest.SprayCoolingNozzleDefinition, int32(1));
+        
+            % Radial Housing
+            test.objectUnderTest.Spray_RadialHousing = true;
+            test.verifyTrue(test.objectUnderTest.Spray_RadialHousing);
+        
+            test.objectUnderTest.Spray_RadialHousing_VolumeFlowRate_m3ps = 0.05;
+            test.verifyEqual(test.objectUnderTest.Spray_RadialHousing_VolumeFlowRate_m3ps, 0.05);
+        
+            test.objectUnderTest.Spray_RadialHousing_FlowProportion_F = 0.6;
+            test.verifyEqual(test.objectUnderTest.Spray_RadialHousing_FlowProportion_F, 0.6);
+        
+            test.objectUnderTest.Spray_RadialHousing_InletTemperature_F_degC = 25.0;
+            test.verifyEqual(test.objectUnderTest.Spray_RadialHousing_InletTemperature_F_degC, 25.0);
+        
+            test.objectUnderTest.Spray_RadialHousing_InletTemperature_R_degC = 30.0;
+            test.verifyEqual(test.objectUnderTest.Spray_RadialHousing_InletTemperature_R_degC, 30.0);
+        
+            % Radial Rotor
+            test.objectUnderTest.Spray_RadialRotor = true;
+            test.verifyTrue(test.objectUnderTest.Spray_RadialRotor);
+        
+            test.objectUnderTest.Spray_RadialRotor_VolumeFlowRate_m3ps = 0.04;
+            test.verifyEqual(test.objectUnderTest.Spray_RadialRotor_VolumeFlowRate_m3ps, 0.04);
+        
+            test.objectUnderTest.Spray_RadialRotor_FlowProportion_F = 0.7;
+            test.verifyEqual(test.objectUnderTest.Spray_RadialRotor_FlowProportion_F, 0.7);
+        
+            test.objectUnderTest.Spray_RadialRotor_InletTemperature_F_degC = 27.0;
+            test.verifyEqual(test.objectUnderTest.Spray_RadialRotor_InletTemperature_F_degC, 27.0);
+        
+            test.objectUnderTest.Spray_RadialRotor_InletTemperature_R_degC = 32.0;
+            test.verifyEqual(test.objectUnderTest.Spray_RadialRotor_InletTemperature_R_degC, 32.0);
+        
+            % Axial Endcap
+            test.objectUnderTest.Spray_AxialEndcap = true;
+            test.verifyTrue(test.objectUnderTest.Spray_AxialEndcap);
+        
+            test.objectUnderTest.Spray_AxialEndcap_VolumeFlowRate_m3ps = 0.03;
+            test.verifyEqual(test.objectUnderTest.Spray_AxialEndcap_VolumeFlowRate_m3ps, 0.03);
+        
+            test.objectUnderTest.Spray_AxialEndcap_FlowProportion_F = 0.5;
+            test.verifyEqual(test.objectUnderTest.Spray_AxialEndcap_FlowProportion_F, 0.5);
+        
+            test.objectUnderTest.Spray_AxialEndcap_InletTemperature_F_degC = 28.0;
+            test.verifyEqual(test.objectUnderTest.Spray_AxialEndcap_InletTemperature_F_degC, 28.0);
+        
+            test.objectUnderTest.Spray_AxialEndcap_InletTemperature_R_degC = 33.0;
+            test.verifyEqual(test.objectUnderTest.Spray_AxialEndcap_InletTemperature_R_degC, 33.0);
+        end
+
         function testGenerateSimulinkReducedOrderModel(test)
             % Test for generateSimulinkReducedOrderModel method.
             % Checks that the generated model data is consistent, and checks
