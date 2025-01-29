@@ -34,8 +34,8 @@ on:
       - '**.xml'
 
 jobs:
-  check-project:
-    name: Check Project on ${{ matrix.os }} with MATLAB ${{ matrix.matlab_version }}
+  run-all-tests:
+    name: Run All Tests on ${{ matrix.os }} with MATLAB ${{ matrix.matlab_version }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -51,7 +51,7 @@ jobs:
         uses: matlab-actions/setup-matlab@v2
         with:
           release: ${{ matrix.matlab_version }}
-          products: >
+          products: |
             Simulink
             Simscape
             Simscape_Electrical
@@ -59,41 +59,11 @@ jobs:
             Control_System_Toolbox
             Motor_Control_Blockset
 
-      - name: Run Project Tests
+      - name: Run All Tests (Except Motor-CAD Interface Tests)
         uses: matlab-actions/run-command@v2
         with:
           command: |
             openProject(pwd);
             ImportMotorCADThermalModel_CheckProject_runtests;
-
-  run-libraries-tests:
-    name: Run Libraries Tests on ${{ matrix.os }} with MATLAB ${{ matrix.matlab_version }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        matlab_version: [R2021b, R2022b, R2023b, R2024b]
-    env:
-      EDITOR: nano  # Setting the EDITOR environment variable
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Setup MATLAB ${{ matrix.matlab_version }}
-        uses: matlab-actions/setup-matlab@v2
-        with:
-          release: ${{ matrix.matlab_version }}
-          products: >
-            Simulink
-            Simscape
-            Simscape_Electrical
-            Simscape_Fluids
-            Control_System_Toolbox
-            Motor_Control_Blockset
-
-      - name: Run Libraries Tests
-        uses: matlab-actions/run-command@v2
-        with:
-          command: |
-            openProject(pwd);
             ImportMotorCADThermalModel_runlibtests;
+            ImportMotorCADThermalModel_runmodeltests;
