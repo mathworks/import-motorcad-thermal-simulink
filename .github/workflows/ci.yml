@@ -4,13 +4,12 @@
 # https://docs.github.com/en/actions
 #
 # For using MathWorks products in GitHub Actions, see
-# https://github.com/matlab-actions/overview
+# https://github.com/matlab-actions/
 #
 # For details about the syntax of this file, see
 # https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions
 
 # Copyright 2023-2025 The MathWorks, Inc.
-
 name: CI using MATLAB Across Multiple OS and MATLAB Versions
 
 on:
@@ -42,6 +41,8 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
         matlab_version: [R2021b, R2022b, R2023b, R2024b]
+    env:
+      EDITOR: nano  # Setting the EDITOR environment variable
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -50,6 +51,13 @@ jobs:
         uses: matlab-actions/setup-matlab@v2
         with:
           release: ${{ matrix.matlab_version }}
+          products: >
+            Simulink
+            Simscape
+            Simscape_Electrical
+            Simscape_Fluids
+            Control_System_Toolbox
+            Motor_Control_Blockset
 
       - name: Run Project Tests
         uses: matlab-actions/run-command@v2
@@ -65,6 +73,8 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
         matlab_version: [R2021b, R2022b, R2023b, R2024b]
+    env:
+      EDITOR: nano  # Setting the EDITOR environment variable
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -73,6 +83,13 @@ jobs:
         uses: matlab-actions/setup-matlab@v2
         with:
           release: ${{ matrix.matlab_version }}
+          products: >
+            Simulink
+            Simscape
+            Simscape_Electrical
+            Simscape_Fluids
+            Control_System_Toolbox
+            Motor_Control_Blockset
 
       - name: Run Libraries Tests
         uses: matlab-actions/run-command@v2
