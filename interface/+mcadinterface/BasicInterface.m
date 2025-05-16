@@ -191,20 +191,20 @@ classdef BasicInterface < mcadinterface.AbstractInterface
             % Multi-Nozzle Spray Cooling Settings -------------------
             'SprayCoolingNozzleDefinition'; ... % int32 0 = user-defined (default), 1 = Grouped by source (multiple nozzles)
             % Radial (from Housing)
-            'Spray_RadialHousing'; ... % true/false
-            'Spray_RadialHousing_VolumeFlowRate_m3ps'; ... % double
+            'Spray_RadialHousing_Enable'; ... % true/false
+            'Spray_RadialHousing_FlowRate_m3ps'; ... % double
             'Spray_RadialHousing_FlowProportion_F'; ... % double (betwen 0 and 1). How much of the total flow rate goes to the front side. The rest goes to the rear side. 
             'Spray_RadialHousing_InletTemperature_F_degC'; ... % double. Temperature of spray inlet on the front side.
             'Spray_RadialHousing_InletTemperature_R_degC'; ... % double. Temperature of spray inlet on the rear side.
             % Radial (from Rotor)
-            'Spray_RadialRotor'; ... % true/false
-            'Spray_RadialRotor_VolumeFlowRate_m3ps'; ... % double
+            'Spray_RadialRotor_Enable'; ... % true/false
+            'Spray_RadialRotor_FlowRate_m3ps'; ... % double
             'Spray_RadialRotor_FlowProportion_F'; ... % double (betwen 0 and 1). How much of the total flow rate goes to the front side. The rest goes to the rear side. 
             'Spray_RadialRotor_InletTemperature_F_degC'; ... % double. Temperature of spray inlet on the front side.
             'Spray_RadialRotor_InletTemperature_R_degC'; ... % double. Temperature of spray inlet on the rear side.
             % Axial (from Endcap)
-            'Spray_AxialEndcap'; ... % true/false
-            'Spray_AxialEndcap_VolumeFlowRate_m3ps'; ... % double
+            'Spray_AxialEndcap_Enable'; ... % true/false
+            'Spray_AxialEndcap_FlowRate_m3ps'; ... % double
             'Spray_AxialEndcap_FlowProportion_F'; ... % double (betwen 0 and 1). How much of the total flow rate goes to the front side. The rest goes to the rear side. 
             'Spray_AxialEndcap_InletTemperature_F_degC'; ... % double. Temperature of spray inlet on the front side.
             'Spray_AxialEndcap_InletTemperature_R_degC'; ... % double. Temperature of spray inlet on the rear side.
@@ -269,18 +269,18 @@ classdef BasicInterface < mcadinterface.AbstractInterface
         SprayCooling_InletTemperature_degC (1,1) double % Inlet temperature [degC]
         % Multi-Nozzle Spray Cooling Settings ---------------
         SprayCoolingNozzleDefinition (1,1) int32
-        Spray_RadialHousing (1,1) logical
-        Spray_RadialHousing_VolumeFlowRate_m3ps (1,1) double
+        Spray_RadialHousing_Enable (1,1) logical
+        Spray_RadialHousing_FlowRate_m3ps (1,1) double
         Spray_RadialHousing_FlowProportion_F (1,1) double
         Spray_RadialHousing_InletTemperature_F_degC (1,1) double
         Spray_RadialHousing_InletTemperature_R_degC (1,1) double
-        Spray_RadialRotor (1,1) logical
-        Spray_RadialRotor_VolumeFlowRate_m3ps (1,1) double
+        Spray_RadialRotor_Enable (1,1) logical
+        Spray_RadialRotor_FlowRate_m3ps (1,1) double
         Spray_RadialRotor_FlowProportion_F (1,1) double
         Spray_RadialRotor_InletTemperature_F_degC (1,1) double
         Spray_RadialRotor_InletTemperature_R_degC (1,1) double
-        Spray_AxialEndcap (1,1) logical
-        Spray_AxialEndcap_VolumeFlowRate_m3ps (1,1) double
+        Spray_AxialEndcap_Enable (1,1) logical
+        Spray_AxialEndcap_FlowRate_m3ps (1,1) double
         Spray_AxialEndcap_FlowProportion_F (1,1) double
         Spray_AxialEndcap_InletTemperature_F_degC (1,1) double
         Spray_AxialEndcap_InletTemperature_R_degC (1,1) double
@@ -694,14 +694,14 @@ classdef BasicInterface < mcadinterface.AbstractInterface
             obj.SprayCoolingNozzleDefinition = value;
         end
         
-        function set.Spray_RadialHousing(obj, value)
-            obj.setParameter('Spray_RadialHousing', value);
-            obj.Spray_RadialHousing = value;
+        function set.Spray_RadialHousing_Enable(obj, value)
+            obj.setParameter('Spray_RadialHousing_Enable', value);
+            obj.Spray_RadialHousing_Enable = value;
         end
         
-        function set.Spray_RadialHousing_VolumeFlowRate_m3ps(obj, value)
-            obj.setParameter('Spray_RadialHousing_VolumeFlowRate_m3ps', value);
-            obj.Spray_RadialHousing_VolumeFlowRate_m3ps = value;
+        function set.Spray_RadialHousing_FlowRate_m3ps(obj, value)
+            obj.setParameter('Spray_RadialHousing_FlowRate_m3ps', value);
+            obj.Spray_RadialHousing_FlowRate_m3ps = value;
         end
         
         function set.Spray_RadialHousing_FlowProportion_F(obj, value)
@@ -719,14 +719,14 @@ classdef BasicInterface < mcadinterface.AbstractInterface
             obj.Spray_RadialHousing_InletTemperature_R_degC = value;
         end
         
-        function set.Spray_RadialRotor(obj, value)
-            obj.setParameter('Spray_RadialRotor', value);
-            obj.Spray_RadialRotor = value;
+        function set.Spray_RadialRotor_Enable(obj, value)
+            obj.setParameter('Spray_RadialRotor_Enable', value);
+            obj.Spray_RadialRotor_Enable = value;
         end
         
-        function set.Spray_RadialRotor_VolumeFlowRate_m3ps(obj, value)
-            obj.setParameter('Spray_RadialRotor_VolumeFlowRate_m3ps', value);
-            obj.Spray_RadialRotor_VolumeFlowRate_m3ps = value;
+        function set.Spray_RadialRotor_FlowRate_m3ps(obj, value)
+            obj.setParameter('Spray_RadialRotor_FlowRate_m3ps', value);
+            obj.Spray_RadialRotor_FlowRate_m3ps = value;
         end
         
         function set.Spray_RadialRotor_FlowProportion_F(obj, value)
@@ -744,14 +744,14 @@ classdef BasicInterface < mcadinterface.AbstractInterface
             obj.Spray_RadialRotor_InletTemperature_R_degC = value;
         end
         
-        function set.Spray_AxialEndcap(obj, value)
-            obj.setParameter('Spray_AxialEndcap', value);
-            obj.Spray_AxialEndcap = value;
+        function set.Spray_AxialEndcap_Enable(obj, value)
+            obj.setParameter('Spray_AxialEndcap_Enable', value);
+            obj.Spray_AxialEndcap_Enable = value;
         end
         
-        function set.Spray_AxialEndcap_VolumeFlowRate_m3ps(obj, value)
-            obj.setParameter('Spray_AxialEndcap_VolumeFlowRate_m3ps', value);
-            obj.Spray_AxialEndcap_VolumeFlowRate_m3ps = value;
+        function set.Spray_AxialEndcap_FlowRate_m3ps(obj, value)
+            obj.setParameter('Spray_AxialEndcap_FlowRate_m3ps', value);
+            obj.Spray_AxialEndcap_FlowRate_m3ps = value;
         end
 
         function set.Spray_AxialEndcap_FlowProportion_F(obj, value)

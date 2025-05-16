@@ -41,8 +41,6 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
         matlab_version: [R2021b, R2022b, R2023b, R2024b]
-    env:
-      EDITOR: nano  # Setting the EDITOR environment variable
     steps:
       - name: Check out repository
         uses: actions/checkout@v4

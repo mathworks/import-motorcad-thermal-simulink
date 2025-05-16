@@ -35,10 +35,10 @@ classdef ThermalInterface < mcadinterface.BasicInterface
 
         % Thermal matrices
 
-        CapMat (:,:) double % Node capacitance vector
+        CapMat (:,1) double % Node capacitance vector
         ResMat (:,:) double % Node resistance matrix
-        PowMat (:,:) double % Node steady-state power vector
-        TempMat (:,:) double % Node temperature boundary condition
+        PowMat (:,1) double % Node steady-state power vector
+        TempMat (:,1) double % Node temperature boundary condition
 
         % State-space matrices
 
@@ -50,8 +50,8 @@ classdef ThermalInterface < mcadinterface.BasicInterface
         EnabledCoolingSystems (:,1) logical % List of which cooling systems are enabled (true or false)
         CoolingSystemsDigraphs (:,1) struct % Structure containing the directed graph of each cooling systems node flow
         AdjacencyMat (:,:) double % Global adjacency matrix for cooling systems node flow connectivity
-        InletArrayIdxs (:,1) double % Inlet nodes indices
-        OutletArrayIdxs (:,1) double % Outlet nodes indices
+        InletArrayIdxs (:,1) cell % Inlet nodes indices
+        OutletArrayIdxs (:,1) cell % Outlet nodes indices
         CoolantArrayIdxs (:,1) double % Coolant nodes indices
     end
 
@@ -62,10 +62,26 @@ classdef ThermalInterface < mcadinterface.BasicInterface
                      'Housing Water Jacket'; ...
                      'Shaft Spiral Groove'; ...
                      'Wet Rotor'; ...
-                     'Spray Cooling'; ...
+                     'Spray Cooling'; ... % standard spray cooling
+                     'Spray_RadialHousing_F'; ... % multi-nozzle spray - radial hosing (front side) 
+                     'Spray_RadialHousing_R'; ... % multi-nozzle spray - radial hosing (rear side) 
+                     'Spray_RadialRotor_F'; ...   % multi-nozzle spray - radial rotor (front side) 
+                     'Spray_RadialRotor_R'; ...   % multi-nozzle spray - radial rotor (rear side) 
+                     'Spray_AxialEndcap_F'; ...   % multi-nozzle spray - axial endcap (front side) 
+                     'Spray_AxialEndcap_R'; ...   % multi-nozzle spray - axial endcap (rear side) 
                      'Rotor Water Jacket'; ...
                      'Slot Water Jacket'; ...
                                    }; 
+    end
+
+    properties(Constant, Access=private)
+        MultiNozzleSprayCoolingSystems=["Spray_RadialHousing_F"; ...
+                                        "Spray_RadialHousing_R"; ...
+                                        "Spray_RadialRotor_F"; ...
+                                        "Spray_RadialRotor_R"; ...
+                                        "Spray_AxialEndcap_F"; ...
+                                        "Spray_AxialEndcap_R"; ...
+                                        ];
     end
 
     methods(Access=public)
@@ -91,7 +107,7 @@ classdef ThermalInterface < mcadinterface.BasicInterface
             obj.updateMatricesAndGroupNamesAndNodes();
 
             obj.updateCoolingSystemsData();
-            obj.checkCoolingSystemsIndependent();
+            % obj.checkCoolingSystemsIndependent();
 
             obj.updateLabLossTables();
 
@@ -185,142 +201,204 @@ classdef ThermalInterface < mcadinterface.BasicInterface
             obj.mcad.export_matrices(obj.workingDirectory);
         end
 
-        function [CapMat, ResMat, PowMat, TempMat, NodeNames] = getThermalStateSpaceMatricesFromFiles(obj)
-            %Get the capacitance, resistance, and power
-            %arrays for thermal model .cmf, .rmf, .pmf text files in the current
-            %directory.
-
+        function [CapMat, ResMat, PowMat, TempMat, McadIdxes] = getThermalStateSpaceMatricesFromFiles(obj)
+            %GETTHERMALSTATEMATRIXSFROMFILES Retrieves thermal matrices and corresponding Motor-CAD indices from Motor-CAD export files.
+            %
+            % [CapMat, ResMat, PowMat, TempMat, McadIdxes] = getThermalStateSpaceMatricesFromFiles(obj)
+            %
+            % Outputs:
+            %   CapMat    - (Nx1 double) Node capacitance vector.
+            %   ResMat    - (NxN double) Node resistance matrix.
+            %   PowMat    - (Nx1 double) Node steady-state power vector.
+            %   TempMat   - (Nx1 double) Node temperature boundary condition.
+            %   McadIdxes - (Nx1 int32) List of corresponding Motor-CAD indices.
+        
             motFileName = obj.motFullFile;
-
+        
             CapFileName = strrep(motFileName, '.mot', '.cmf');
             ResFileName = strrep(motFileName, '.mot', '.rmf');
             PowFileName = strrep(motFileName, '.mot', '.pmf');
             TempFileName = strrep(motFileName, '.mot', '.tmf');
         
-        
             % Read cmf file
-            [CapMatNm1, ~] = readMfFile1D(CapFileName); % size numNodes-1
+            [CapMatNm1, CapMcadIdxes] = readMfFile1D(CapFileName); % size numNodes-1
             numNodes = length(CapMatNm1) + 1; % number of nodes (+1 for ambient)
             CapMat = zeros(numNodes,1);
             CapMat(2:end) = CapMatNm1;
         
+            % Read rmf file
+            ResMat = readMfFile2D(ResFileName, numNodes); % Assuming readMfFile2D remains unchanged
+        
+            % Read pmf file
+            [PowMatNm1, PowMcadIdxes] = readMfFile1D(PowFileName); % size numNodes-1
+            PowMat = zeros(numNodes,1);
+            PowMat(2:end) = PowMatNm1;
+        
             % Read tmf file
-            [TempMat, NodeNames] = readMfFile1D(TempFileName); % size numNodes
-            % remove initial and final parenthesis from obj.NodeNames
-            for idxNode = 1:length(NodeNames)
-                NodeNames{idxNode} = NodeNames{idxNode}(2:end-1);
-            end
-            
+            [TempMat, TempMcadIdxes] = readMfFile1D(TempFileName); % size numNodes
+        
+            % Handle Ambient Node
             CapMat(1,1) = 1e20; % Ambient must have large capacitance
-            for idx_node=2:numNodes      
-                if  TempMat(idx_node,1) ~= -10000000 % Fixed-temperature node
+            for idx_node = 2:numNodes      
+                if TempMat(idx_node) ~= -10000000 % Fixed-temperature node
                     % Model these nodes as having very large capacitances
-                    CapMat(idx_node,1) = 1e20;
+                    CapMat(idx_node) = 1e20;
                 end 
             end
         
-            % Read rmf file
-            ResMat = readMfFile2D(ResFileName, numNodes);
-            
-            % Read pmf file
-            [PowMatNm1,~] = readMfFile1D(PowFileName); % size numNodes-1
-            PowMat = zeros(numNodes,1);
-            PowMat(2:end) = PowMatNm1;
-
+            % Consistency Check: Ensure that Cap, Pow, and Temp files have consistent indices
+            % Assuming that Motor-CAD indices are unique and ordered, except for ambient
+            % If not, additional mapping may be required
+        
+            % For simplicity, assuming that CapMcadIdxes and PowMcadIdxes correspond to nodes 2:numNodes
+            % and TempMcadIdxes includes node 1 (ambient) followed by nodes 2:numNodes
+        
+            % Assign Motor-CAD indices
+            % Ambient node assumed to have index 0 or a special identifier
+            % Here, we will assign a special index for ambient, e.g., 0
+            McadIdxes = zeros(numNodes,1); % Initialize with 0 for ambient
+            McadIdxes(2:end) = CapMcadIdxes; % Assign indices from .cmf (excluding ambient)
+        
+            % Optionally, verify that PowMcadIdxes match CapMcadIdxes
+            if ~isequal(PowMcadIdxes, CapMcadIdxes)
+                warning('Mismatch between Motor-CAD indices in .cmf and .pmf files.');
+            end
+            if ~isequal(TempMcadIdxes(2:end), CapMcadIdxes)
+                warning('Mismatch between Motor-CAD indices in .cmf and .tmf files.');
+            end
+        
         end
 
         function [GroupNamesAndMcadIdxes, NodeNamesAndMcadIdx] = updateMatricesAndGroupNamesAndNodes(obj)
-            % Update state-space matrices, group data (names and Motor-CAD
-            % indices) and node data (names and Motor-CAD indices)
-
+            %UPDATEMATRICESANDGROUPNAMESANDNODES Updates state-space matrices, group names, and node data 
+            %based on current Motor-CAD state.
+            %
+            % [GroupNamesAndMcadIdxes, NodeNamesAndMcadIdx] = updateMatricesAndGroupNamesAndNodes(obj)
+            %
+            % Outputs:
+            %   GroupNamesAndMcadIdxes - Cell array with group names and their associated Motor-CAD node indices.
+            %   NodeNamesAndMcadIdx    - Cell array with node names and their corresponding Motor-CAD node indices.
+        
+            % --- 1) BACK UP CURRENT PROPERTIES (SO YOU CAN RESTORE AFTER MATRIX EXPORT) ---
             xxLossValues = obj.LossValues;
             xxEnableStatorTempCoeffRes = obj.EnableStatorTempCoeffRes;
             xxEnableRotorTempCoeffRes = obj.EnableRotorTempCoeffRes;
-
+        
+            % --- 2) GENERATE (TEMPORARY) THERMAL MATRICES & WRITE FILES ---
             obj.setupForThermalMatricesUpdate();
             obj.writeThermalStateSpaceFiles();
-            [xCapMat, xResMat, xPowMat, xTempMat, xNodeNames] = obj.getThermalStateSpaceMatricesFromFiles();
-
-            % restore original properties prior to matrices update
+            [xCapMat, xResMat, xPowMat, xTempMat, xMcadIdxs] = obj.getThermalStateSpaceMatricesFromFiles();
+        
+            % --- 3) RESTORE PROPERTIES AFTER MATRIX EXPORT ---
             obj.LossValues = xxLossValues; 
             obj.EnableStatorTempCoeffRes = xxEnableStatorTempCoeffRes;
             obj.EnableRotorTempCoeffRes = xxEnableRotorTempCoeffRes;
-
+        
+            % --- 4) UPDATE THERMAL MATRICES & STATE-SPACE ARRAYS IN THE OBJECT ---
             obj.CapMat = xCapMat;
             obj.ResMat = xResMat;
             obj.PowMat = xPowMat;
-            obj.TempMat = xTempMat;  
-
+            obj.TempMat = xTempMat;
             [xAmat, xBmat] = getStateSpaceMatricesFromThermalMatrices(xCapMat, xResMat);
             obj.Amat = xAmat;
             obj.Bmat = xBmat;
-
-            obj.NodeNames = xNodeNames;
         
-            % Read nmf file
+            % --- 5) READ THE .NMF FILE (WHERE NODE NAMES ARE NOT TRUNCATED) ---
             motFileName = obj.motFullFile;
-            NodeFileName = strrep(motFileName, '.mot', '.nmf');        
-            
-            [GroupNames, nodeNames, GroupIdxs, NodeIdx] = readNmfFile(NodeFileName); % size numNodes-1      
+            NodeFileName = strrep(motFileName, '.mot', '.nmf');
+            [GroupNames, nodeNames, GroupIdxs, nmfMcadIdxs] = readNmfFile(NodeFileName);
+            %
+            %  > GroupNames  : e.g. {'Stator (Active)', 'Spray Cooling', ...}
+            %  > nodeNames   : e.g. {'StatorSlot1', 'Spray_RadialHousing_Inlet_Fluid_F', ...}
+            %  > GroupIdxs   : each cell is a numeric array of MCAD node indices in that group
+            %  > nmfMcadIdxs : cell array of MCAD node indices (one for each entry in nodeNames)
         
-            numNodes = length(NodeIdx);
+            % --- 6) BUILD GROUP->IDX MAPPING ---
             numGroups = length(GroupNames);
-        
             GroupNamesAndMcadIdxes = cell(numGroups, 2);
-            GroupNamesAndMcadIdxes(:,1) = GroupNames;
-            GroupNamesAndMcadIdxes(:,2) = GroupIdxs;
+            for g = 1:numGroups
+                GroupNamesAndMcadIdxes{g, 1} = GroupNames{g};
+                GroupNamesAndMcadIdxes{g, 2} = GroupIdxs{g}; 
+            end
         
+            % --- 7) BUILD NODE->IDX MAPPING, THEN RE-SORT TO MATCH xMcadIdxs ORDER ---
+            numNodes = length(nmfMcadIdxs);
             NodeNamesAndMcadIdx = cell(numNodes, 2);
-            NodeNamesAndMcadIdx(:,1) = nodeNames;  
-            NodeNamesAndMcadIdx(:,2) = NodeIdx;
-
-            % sort according to obj.NodeNames
-            sortIdxs = nan(size(nodeNames));
-            for idxNode = 1:numNodes                
-                sortIdxs(idxNode) = find(strcmp(NodeNamesAndMcadIdx(:,1),obj.NodeNames{idxNode}));
+        
+            % Populate initial (unsorted) mapping from .nmf
+            for n = 1:numNodes
+                NodeNamesAndMcadIdx{n,1} = nodeNames{n};      % Full name
+                NodeNamesAndMcadIdx{n,2} = nmfMcadIdxs{n};    % Numeric index
             end
-            NodeNamesAndMcadIdx(:,2) = NodeNamesAndMcadIdx(sortIdxs,2);        
-            for idxNode = 1:numNodes   
-                NodeNamesAndMcadIdx(idxNode,1) = obj.NodeNames(idxNode);
+        
+            % We want to reorder so that NodeNamesAndMcadIdx(:) align with the row/col
+            % order in xCapMat, xResMat, xPowMat, xTempMat, i.e. the order of xMcadIdxs.
+            sortedNodeIdx = nan(numNodes,1);
+            for i = 1:numNodes
+                thisMcadIdx = xMcadIdxs(i);          % MCAD index from the matrix file
+                % find where that index appears in nmfMcadIdxs
+                pos = find(cell2mat(nmfMcadIdxs) == thisMcadIdx, 1);
+                if isempty(pos)
+                    error('Motor-CAD index %d from .cmf/.tmf/.pmf/.rmf not found in .nmf.', thisMcadIdx);
+                end
+                sortedNodeIdx(i) = pos;
             end
-
-            % remove initial and final parenthesis from obj.NodeNames
-            obj.NodeNames = NodeNamesAndMcadIdx(:,1);
-
-            % Update
+        
+            % Reorder NodeNamesAndMcadIdx to match xMcadIdxs
+            NodeNamesAndMcadIdx = NodeNamesAndMcadIdx(sortedNodeIdx, :);
+        
+            % --- 8) SET obj.NodeNames USING THE FULL (UNCROPPED) NAMES FROM .NMF ---
+            obj.NodeNames = cell(numNodes,1);
+            for i = 1:numNodes
+                obj.NodeNames{i} = stripOuterParentheses(NodeNamesAndMcadIdx{i,1});
+            end
+        
+            % --- 9) SAVE FINAL MAPPINGS BACK TO THE OBJECT ---
             obj.GroupNamesAndMcadIdxes = GroupNamesAndMcadIdxes;
-            obj.NodeNamesAndMcadIdx = NodeNamesAndMcadIdx;
+            obj.NodeNamesAndMcadIdx    = NodeNamesAndMcadIdx;
 
         end
 
         function updateCoolingSystemsData(obj)
-            % Update cooling systems data (AdjacencyMat, InletArrayIdxs,
-            % OutletArrayIdxs, CoolantArrayIdxs)
-
-            groupNames = obj.GroupNamesAndMcadIdxes(:,1);
-            obj.CoolingSystemNamesAndMcadIdxes = obj.GroupNamesAndMcadIdxes(contains(groupNames, obj.SupportedCoolingSystemsMcadNames), :);
-            obj.EnabledCoolingSystems = contains(obj.SupportedCoolingSystemsMcadNames, obj.CoolingSystemNamesAndMcadIdxes(:,1));
+            % Refresh the adjacency, inlet, and outlet data for each cooling system.
+        
+            % 1) Split out the spray-cooling groups as needed:
+            postProcessedGroups = splitSprayCoolingGroups(obj);
+            
+            % 2) Now filter them by the supported names:
+            groupNames = postProcessedGroups(:,1);
+            isSupported = contains(groupNames, obj.SupportedCoolingSystemsMcadNames);
+            
+            obj.CoolingSystemNamesAndMcadIdxes = postProcessedGroups(isSupported,:);
+            
+            % 3) Figure out which systems are actually "enabled" in the final object.
+            obj.EnabledCoolingSystems = contains(obj.SupportedCoolingSystemsMcadNames, ...
+                                                 obj.CoolingSystemNamesAndMcadIdxes(:,1));
+            
             numSuppCoolSys = length(obj.SupportedCoolingSystemsMcadNames);
             obj.CoolingSystemsDigraphs = struct();
+            
+            % 4) Build each coolant's directed graph
             for idxSuppCoolSys = 1:numSuppCoolSys
-                isThisCoolSysEnabled = obj.EnabledCoolingSystems(idxSuppCoolSys);
-                thisCoolantGroupName = obj.SupportedCoolingSystemsMcadNames{idxSuppCoolSys};
-                if isThisCoolSysEnabled
-                    [thisCoolantDigraph, thisCoolantNodeNamesAndArrayIdx] = obj.getDigraphForCoolantGroup(thisCoolantGroupName, false); % don't draw plot
-                    obj.CoolingSystemsDigraphs(idxSuppCoolSys).Digraph = thisCoolantDigraph;
-                    obj.CoolingSystemsDigraphs(idxSuppCoolSys).NodeNamesAndArrayIdx = thisCoolantNodeNamesAndArrayIdx;
+                isEnabled = obj.EnabledCoolingSystems(idxSuppCoolSys);
+                coolantName = obj.SupportedCoolingSystemsMcadNames{idxSuppCoolSys};
+        
+                if isEnabled
+                    [digG, nodeInfo] = obj.getDigraphForCoolantGroup(coolantName, false);
+                    obj.CoolingSystemsDigraphs(idxSuppCoolSys).Digraph              = digG;
+                    obj.CoolingSystemsDigraphs(idxSuppCoolSys).NodeNamesAndArrayIdx = nodeInfo;
                 else
-                    obj.CoolingSystemsDigraphs(idxSuppCoolSys).Digraph = []; % empty digraph
-                    obj.CoolingSystemsDigraphs(idxSuppCoolSys).NodeNamesAndArrayIdx = []; % empty NodeNamesAndArrayIdx
+                    obj.CoolingSystemsDigraphs(idxSuppCoolSys).Digraph              = [];
+                    obj.CoolingSystemsDigraphs(idxSuppCoolSys).NodeNamesAndArrayIdx = [];
                 end
             end
-
-            [xAdjacencyMat, xInletArrayIdxs, xOutletArrayIdxs, xCoolantArrayIdxs] = getAdjacencyMatAndInletOutletIdxs(obj);
-            obj.AdjacencyMat = xAdjacencyMat;
-            obj.InletArrayIdxs = xInletArrayIdxs;
-            obj.OutletArrayIdxs = xOutletArrayIdxs;
-            obj.CoolantArrayIdxs = xCoolantArrayIdxs;
-
+        
+            % 5) Finally assemble global adjacency plus inlet/outlet indices
+            [A, inletsCell, outletsCell, coolantIdxs] = getAdjacencyMatAndInletOutletIdxs(obj);
+            obj.AdjacencyMat     = A;
+            obj.InletArrayIdxs   = inletsCell;    % cell array, one cell per enabled system
+            obj.OutletArrayIdxs  = outletsCell;   % likewise
+            obj.CoolantArrayIdxs = coolantIdxs;
         end
 
         function TnodesVec = getSteadyStateTemperatureForNodeMcadIdxs(obj, mcadIdxs) 
@@ -522,64 +600,141 @@ classdef ThermalInterface < mcadinterface.BasicInterface
         % Advanced workflows -----------
 
         function [DirectedGraphCoolant, NodeNamesAndArrayIdx] = getDigraphForCoolantGroup(obj, CoolantGroupName, plotCoolantGraphFlag)
-            % Get the directed flow graph for a specific cooling system
-            % group. Optionally plot the graph.
-            % Input arguments:
-            % - CoolantGroupName [string] : name of the cooling group
-            % Output arguments:
-            % - Digraph [1x1 digraph] : Directed graph that represents the coolant flow from inlet to
-            % outlet nodes with possible path splits and merges
-            % - NodeNamesAndArrayIdx [Mx3 cell] : cell with the node name,
-            % array index, and Mcad index for each of the coolant nodes. The order is
-            % in the same order of the AdjacencyMatrix rows
-
-            % Extract coolant variables
+            %----------------------------------------------------------------------
+            % 1) Identify all nodes belonging to this coolant group
+            %----------------------------------------------------------------------
             AllNodeNames = obj.NodeNames;
-            assert(all(strcmp(AllNodeNames, obj.NodeNamesAndMcadIdx(:,1)))) % required condition
             AllMcadIdxes = [obj.NodeNamesAndMcadIdx{:,2}];
-            xResMat = obj.ResMat;  
-            CoolantNodesMcadIdx = obj.CoolingSystemNamesAndMcadIdxes{contains(obj.CoolingSystemNamesAndMcadIdxes(:,1), CoolantGroupName), 2};
-            CoolantNodeNames = cell(size(CoolantNodesMcadIdx));
-            CoolantArrayIdxes = nan(size(CoolantNodesMcadIdx));
-            NodeNamesAndArrayIdx = cell(length(CoolantNodesMcadIdx),3);
-            for idxCoolantNode = 1:length(CoolantNodesMcadIdx)
-                CoolantNodeNames{idxCoolantNode} = AllNodeNames{CoolantNodesMcadIdx(idxCoolantNode) == AllMcadIdxes};
-                CoolantArrayIdxes(idxCoolantNode) = find(CoolantNodesMcadIdx(idxCoolantNode) == AllMcadIdxes);
-                NodeNamesAndArrayIdx{idxCoolantNode, 1} = CoolantNodeNames{idxCoolantNode};
-                NodeNamesAndArrayIdx{idxCoolantNode, 2} = CoolantArrayIdxes(idxCoolantNode);
-                NodeNamesAndArrayIdx{idxCoolantNode, 3} = CoolantNodesMcadIdx(idxCoolantNode);
+            xResMat = obj.ResMat;
+        
+            % Find the actual MCAD indices for this group
+            matchRow = strcmp(obj.CoolingSystemNamesAndMcadIdxes(:,1), CoolantGroupName);
+            if ~any(matchRow)
+                error('Cooling group "%s" not found among obj.CoolingSystemNamesAndMcadIdxes.', CoolantGroupName);
             end
-
+            CoolantNodesMcadIdx = obj.CoolingSystemNamesAndMcadIdxes{matchRow,2};
+        
+            % Map MCAD indices to array indices
+            numCoolantNodes = length(CoolantNodesMcadIdx);
+            CoolantNodeNames = cell(numCoolantNodes,1);
+            CoolantArrayIdxes = zeros(numCoolantNodes,1);
+            NodeNamesAndArrayIdx = cell(numCoolantNodes,3);  % {NodeName, ArrayIdx, McadIdx}
+        
+            for iC = 1:numCoolantNodes
+                thisMcadIdx = CoolantNodesMcadIdx(iC);
+                arrIdx = find(AllMcadIdxes == thisMcadIdx);
+                CoolantArrayIdxes(iC) = arrIdx;
+                CoolantNodeNames{iC} = AllNodeNames{arrIdx};
+        
+                NodeNamesAndArrayIdx{iC,1} = CoolantNodeNames{iC};
+                NodeNamesAndArrayIdx{iC,2} = arrIdx;
+                NodeNamesAndArrayIdx{iC,3} = thisMcadIdx;
+            end
+        
+            %----------------------------------------------------------------------
+            % 2) Build the sub-matrix of resistances and create an undirected adjacency
+            %----------------------------------------------------------------------
             ResMatCoolant = xResMat(CoolantArrayIdxes, CoolantArrayIdxes);
-
-            % Inlet to outlet graph search
-            isInlet = contains(CoolantNodeNames, 'Inlet');
-            if any(isInlet)
-                if sum(int32(isInlet)) > 1
-                    error('Only one inlet per cooling system is supported');
-                else
-                    % BFS GRAPH ALGORITHM
-                    UndirectedAdjacencyMatrix = abs(ResMatCoolant)<1e8 & ResMatCoolant~=0; % nodes are connected and is not itself
-                    GraphCoolant = graph(UndirectedAdjacencyMatrix, CoolantNodeNames);
-                    nodeVisitList = GraphCoolant.bfsearch(CoolantNodeNames(isInlet));
-                    DirectedGraphCoolant = digraph(adjacency(GraphCoolant), CoolantNodeNames); % all connections are double-edged
-                    DirectedGraphCoolant = DirectedGraphCoolant.rmedge(nodeVisitList(2:end), nodeVisitList(1:end-1)); % remove edges from BFS
-                    % remove cycles
-                    [~,edge_indices] = DirectedGraphCoolant.dfsearch(CoolantNodeNames(isInlet), 'edgetodiscovered', 'Restart', true);
-                    DirectedGraphCoolant = DirectedGraphCoolant.rmedge(edge_indices);
-                    
-                    if plotCoolantGraphFlag
-                        figure('Name', CoolantGroupName);
-                        graphPlot = DirectedGraphCoolant.plot();
-                        graphPlot.Interpreter = 'none'; % avoid subscript labels
-                        set(graphPlot.Parent.Title, 'String', CoolantGroupName)
-                    end
-
-                end
-            else
-               error('No inlet found. Cooling groups must contain an inlet node, identified with an "Inlet" substring in the node name.');
+        
+            % A small threshold to detect "connected" elements:
+            UndirectedAdjacencyMatrix = (abs(ResMatCoolant) < 1e8) & (ResMatCoolant ~= 0);
+        
+            % Make sure it's symmetric, since we consider it an "undirected" view
+            UndirectedAdjacencyMatrix = UndirectedAdjacencyMatrix | UndirectedAdjacencyMatrix';
+        
+            % Create the undirected graph from the sub-adjacency
+            % (MATLAB requires it be symmetric, which we ensured above)
+            UndirectedGraphCoolant = graph(UndirectedAdjacencyMatrix, CoolantNodeNames);
+        
+            %----------------------------------------------------------------------
+            % 3) Identify all inlets by name
+            %----------------------------------------------------------------------
+            isInlet = contains(CoolantNodeNames, 'Inlet', 'IgnoreCase', true);
+            inletNames = CoolantNodeNames(isInlet);
+            if isempty(inletNames)
+                warning('No node name contains "Inlet" in coolant group "%s". Assuming no inlets.', CoolantGroupName);
             end
-
+        
+            %----------------------------------------------------------------------
+            % 4) Construct a directed graph with edges oriented away from each inlet
+            %----------------------------------------------------------------------
+            % Start with a fully bidirectional digraph:
+            DirectedGraphCoolant = digraph(adjacency(UndirectedGraphCoolant), CoolantNodeNames);
+        
+            % For each inlet, do a BFS in the *undirected* graph to discover a tree,
+            % then remove the back edge (child->parent) from the directed graph.
+            for iInlet = 1:length(inletNames)
+                thisInletName = inletNames{iInlet};
+        
+                % BFS on the undirected graph
+                bfsNodeList = UndirectedGraphCoolant.bfsearch(thisInletName);
+        
+                % Consecutive pairs (parent->child) in BFSNodeList define the BFS tree edges.
+                % We keep the direction parent->child, but remove child->parent.
+                for k = 2:length(bfsNodeList)
+                    parentNode = bfsNodeList(k-1);
+                    childNode  = bfsNodeList(k);
+        
+                    if DirectedGraphCoolant.findedge(childNode, parentNode) > 0
+                        DirectedGraphCoolant = DirectedGraphCoolant.rmedge(childNode, parentNode);
+                    end
+                end
+            end
+        
+            %----------------------------------------------------------------------
+            % 5) Identify potential outlets: any node with outdegree=0
+            %    But we may discover multiple or none. We'll handle the "none" case below.
+            %----------------------------------------------------------------------
+            outDeg = outdegree(DirectedGraphCoolant);
+            isOutlet = (outDeg == 0);
+        
+            candidateOutletNames = DirectedGraphCoolant.Nodes.Name(isOutlet);
+        
+            %----------------------------------------------------------------------
+            % 6) If we discover *no* outlets, add a virtual outlet
+            %    (applies, e.g., for pure spray cooling or other types with an unmodeled sink)
+            %----------------------------------------------------------------------
+            if isempty(candidateOutletNames)
+                % Create a new node in the directed graph
+                vName = 'VirtualOutlet';
+                DirectedGraphCoolant = addnode(DirectedGraphCoolant, vName);
+        
+                % For every inlet, connect inlet -> VirtualOutlet
+                for iInlet = 1:length(inletNames)
+                    inName = inletNames{iInlet};
+                    DirectedGraphCoolant = addedge(DirectedGraphCoolant, inName, vName, 1);
+                end
+        
+                % Also update the NodeNamesAndArrayIdx to reflect the new node
+                % We'll append an entry with a new "array index" and "mcad index"
+                newArrayIdx = max(cell2mat(NodeNamesAndArrayIdx(:,2))) + 1;
+                newMcadIdx  = max(cell2mat(NodeNamesAndArrayIdx(:,3))) + 1;
+        
+                NodeNamesAndArrayIdx{end+1,1} = vName;      % node name
+                NodeNamesAndArrayIdx{end,2}   = newArrayIdx; 
+                NodeNamesAndArrayIdx{end,3}   = newMcadIdx; 
+        
+                % No need to alter ResMatCoolant inside this function unless you 
+                % want to track it in your overall adjacency (that can happen later).
+            end
+        
+            %----------------------------------------------------------------------
+            % 7) Remove cycles discovered by a DFS across all inlets
+            %----------------------------------------------------------------------
+            if ~isempty(inletNames)
+                [~, eidx] = DirectedGraphCoolant.dfsearch(inletNames{1}, 'edgetodiscovered', 'Restart', true);
+                DirectedGraphCoolant = DirectedGraphCoolant.rmedge(eidx);
+            end
+        
+            %----------------------------------------------------------------------
+            % 8) Plot if needed
+            %----------------------------------------------------------------------
+            if plotCoolantGraphFlag
+                figure('Name', CoolantGroupName, 'Color','w');
+                gp = plot(DirectedGraphCoolant);
+                gp.Interpreter = 'none';
+                title(sprintf('Directed Flow Graph: %s', CoolantGroupName), 'Interpreter','none');
+            end
         end
 
         function areIndependent = checkCoolingSystemsIndependent(obj)
@@ -640,32 +795,48 @@ classdef ThermalInterface < mcadinterface.BasicInterface
 
         end
 
-        function [AdjacencyMat, InletArrayIdxs, OutletArrayIdxs, CoolantArrayIdxs] = getAdjacencyMatAndInletOutletIdxs(obj)
-            % Get adjacency matrix, inlet node indices, outlet node indices
-            % and all coolant node indices for each cooling system.
-
+        function [AdjacencyMat, InletArrayIdxsCell, OutletArrayIdxsCell, CoolantArrayIdxs] = getAdjacencyMatAndInletOutletIdxs(obj)
+            % Return adjacency matrix, plus cell arrays of inlets/outlets for each enabled cooling system.
+        
             IdxsEnabledCoolSys = find(obj.EnabledCoolingSystems);
-            InletArrayIdxs = nan(length(IdxsEnabledCoolSys),1);
-            OutletArrayIdxs = nan(length(IdxsEnabledCoolSys),1);
+            nEnabled = length(IdxsEnabledCoolSys);
+        
+            InletArrayIdxsCell = cell(nEnabled,1);
+            OutletArrayIdxsCell = cell(nEnabled,1);
+        
             CoolantArrayIdxs = [];
-            AdjacencyMat = zeros(size(obj.ResMat));
-            for idx = 1:length(IdxsEnabledCoolSys)
-                idxCoolSys = IdxsEnabledCoolSys(idx);
-                thisDigraph = obj.CoolingSystemsDigraphs(idxCoolSys).Digraph;
-                thisNodeNamesAndArrayIdx = obj.CoolingSystemsDigraphs(idxCoolSys).NodeNamesAndArrayIdx;
-                nodeNames = thisNodeNamesAndArrayIdx(:,1);
-                nodeArrayIdxs = [thisNodeNamesAndArrayIdx{:,2}];
-                CoolantArrayIdxs = cat(1,CoolantArrayIdxs, nodeArrayIdxs(:));
-                % find inlet and outlet
-                inletIdx = contains(nodeNames, 'Inlet');
-                pathSequence = thisDigraph.bfsearch(find(inletIdx));
-                outletIdx = pathSequence(end);
-                InletArrayIdxs(idx) = nodeArrayIdxs(inletIdx);
-                OutletArrayIdxs(idx) = nodeArrayIdxs(outletIdx);
-                % Add edges to global adjacency matrix
-                AdjacencyMat(nodeArrayIdxs, nodeArrayIdxs) = adjacency(thisDigraph);
+            AdjacencyMat = zeros(size(obj.ResMat));  % global adjacency
+        
+            for iSys = 1:nEnabled
+                idxCoolSys = IdxsEnabledCoolSys(iSys);
+        
+                thisDigraphStruct = obj.CoolingSystemsDigraphs(idxCoolSys);
+                thisDigraph = thisDigraphStruct.Digraph;
+                if isempty(thisDigraph) 
+                    % system not enabled or no nodes
+                    continue;
+                end
+        
+                thisNodeNamesAndArrayIdx = thisDigraphStruct.NodeNamesAndArrayIdx;
+                nodeNames      = thisNodeNamesAndArrayIdx(:,1);
+                nodeArrayIdxs  = [thisNodeNamesAndArrayIdx{:,2}];
+                localAdjMat    = adjacency(thisDigraph);
+        
+                % Add to the global adjacency
+                AdjacencyMat(nodeArrayIdxs, nodeArrayIdxs) = localAdjMat;
+        
+                % Gather all these coolant indices
+                CoolantArrayIdxs = [CoolantArrayIdxs; nodeArrayIdxs(:)]; %#ok<AGROW> 
+        
+                % Find inlets by name (matching how we do it above)
+                isInlet = contains(nodeNames, 'Inlet', 'IgnoreCase', true);
+                InletArrayIdxsCell{iSys} = nodeArrayIdxs(isInlet);
+        
+                % Find outlets by outdegree=0
+                od = outdegree(thisDigraph);
+                isOutlet = (od == 0) & ~isInlet; 
+                OutletArrayIdxsCell{iSys} = nodeArrayIdxs(isOutlet);
             end
-                
         end
 
         function lossDistrForEachType = getLossDistrForEachType(obj)
@@ -726,9 +897,17 @@ classdef ThermalInterface < mcadinterface.BasicInterface
                 thisCoolingSys = coolingSystemsEnabled{idxCoolingSys};
                 enablePropName = strcat(erase(thisCoolingSys, ' '), '_Enable');
                 obj.(enablePropName) = 1;
-
                 frPropNames{idxCoolingSys} = strcat(erase(thisCoolingSys, ' '), '_FlowRate_m3ps');
-                TinPropNames{idxCoolingSys} = strcat(erase(thisCoolingSys, ' '), '_InletTemperature_degC');            
+                if any(startsWith(obj.MultiNozzleSprayCoolingSystems, string(thisCoolingSys))) % multi-nozzle cooling (Front and Rear)
+                    obj.SprayCooling_Enable          = int32(1); % turn on the spray cooling system
+                    obj.SprayCoolingNozzleDefinition = int32(1); % turn on multi-nozzle
+                    TinPropNames{idxCoolingSys} = {...;
+                        strcat(erase(thisCoolingSys, ' '), '_InletTemperature_F_degC');
+                        strcat(erase(thisCoolingSys, ' '), '_InletTemperature_R_degC');
+                        };
+                else % normal case
+                    TinPropNames{idxCoolingSys} = strcat(erase(thisCoolingSys, ' '), '_InletTemperature_degC');
+                end
             end
             obj.updateModel();
 
@@ -763,8 +942,16 @@ classdef ThermalInterface < mcadinterface.BasicInterface
             
             % Get coolant data
             AdjacencyMat = obj.AdjacencyMat;
-            InletCoolIdxs = obj.InletArrayIdxs;
-            OutletCoolIdxs = obj.OutletArrayIdxs;
+            % Simulink does not accept cell arrays as parameters, need to
+            % transform them to arrays:
+            InletCoolIdxs = adaptInletOutletArrays(obj.InletArrayIdxs); 
+            OutletCoolIdxs = adaptInletOutletArrays(obj.OutletArrayIdxs);
+            % Some cooling systems (multinozzle spray) have no outlet node in Motor-CAD.
+            if isempty(OutletCoolIdxs)
+                % FixMe: temporary workaround, assume outlet=inlet (no heat transfer)
+                OutletCoolIdxs = InletCoolIdxs;
+                % TO DO: estimate outlet coolant temperature from the heat transfer
+            end
             
             % Calculate state-space model at each breakpoint -------
             idxsCell = getNestedForLoopIdxs(sizeMatND(1:end-2));
@@ -774,7 +961,7 @@ classdef ThermalInterface < mcadinterface.BasicInterface
             for idxBkptCmb = 1:length(idxsCell)
                 bkptIdxsComb = idxsCell{idxBkptCmb};
                 idxSpeed = bkptIdxsComb(1);
-                disp("Breakpoint #" + num2str(idxBkptCmb));
+                disp("Breakpoint #" + num2str(idxBkptCmb) + " of " + num2str(length(idxsCell)));
                 % Set speed
                 disp("  Speed = " + num2str(BkptsStruct.w(idxSpeed)) + " rpm");
                 obj.Shaft_Speed_RPM = BkptsStruct.w(idxSpeed);
@@ -788,8 +975,16 @@ classdef ThermalInterface < mcadinterface.BasicInterface
                     disp("  " + coolingSystemsEnabled{idxCool} + " flow rate = " + frVal + " lpm");
                     obj.(frPropNames{idxCool}) = frVal/60/1000;
                     TinVal = TinBkpts(bkptIdxsComb(idxTin));
-                    disp("  " + coolingSystemsEnabled{idxCool} +" inlet temperature = " + TinVal + " degC");
-                    obj.(TinPropNames{idxCool}) = TinVal;
+                    if iscell(TinPropNames{idxCool}) % multi-nozzle (F and R)
+                        TinMultiNozzlePropNames = TinPropNames{idxCool};
+                        disp("  " + coolingSystemsEnabled{idxCool} +" F inlet temperature = " + TinVal + " degC");
+                        obj.(TinMultiNozzlePropNames{1}) = TinVal;
+                        disp("  " + coolingSystemsEnabled{idxCool} +" R inlet temperature = " + TinVal + " degC");
+                        obj.(TinMultiNozzlePropNames{2}) = TinVal;
+                    else
+                        disp("  " + coolingSystemsEnabled{idxCool} +" inlet temperature = " + TinVal + " degC");
+                        obj.(TinPropNames{idxCool}) = TinVal;
+                    end
                 end
                 disp("");
 
@@ -1076,6 +1271,74 @@ classdef ThermalInterface < mcadinterface.BasicInterface
             end
 
         end
+
+        function csData = splitSprayCoolingGroups(obj)
+            % This helper returns an updated cell array that replaces the single
+            % "Spray Cooling" row with:
+            %   - A single "Spray Cooling" row in single-nozzle mode, or
+            %   - Up to six subsystem rows in multi-nozzle mode (one for each of the
+            %     front and rear nozzles for the enabled spray cooling systems).
+            
+            % Start by copying all group data except the 'Spray Cooling' row.
+            allGroups = obj.GroupNamesAndMcadIdxes;
+            isSprayCoolingGroup = strcmp(allGroups(:,1), 'Spray Cooling');
+            csData = allGroups(~isSprayCoolingGroup,:);
+            
+            % If there is no "Spray Cooling" group, exit early.
+            if ~any(isSprayCoolingGroup)
+                return;
+            end
+            
+            % Extract the spray cooling MCAD indexes.
+            scIdx = find(isSprayCoolingGroup, 1, 'first');
+            sprayCoolingMcadIdxes = allGroups{scIdx,2};  % e.g. [192 193 196 197]
+            
+            if obj.SprayCoolingNozzleDefinition == 0
+                %=== CASE 1: Single-nozzle mode
+                % Keep the entire "Spray Cooling" group as a single system.
+                csData(end+1,:) = {'Spray Cooling', sprayCoolingMcadIdxes};
+                
+            else
+                %=== CASE 2: Multi-nozzle mode
+                % Each enabled spray cooling system will be split into two independent
+                % cooling subsystems (front and rear).
+                
+                % Retrieve the node names corresponding to the spray cooling MCAD indexes.
+                allMcadIdxes = [obj.NodeNamesAndMcadIdx{:,2}];
+                allNodeNames = obj.NodeNames;  % cell array of all node names, in order
+                
+                % Find the positions in allNodeNames corresponding to sprayCoolingMcadIdxes.
+                [~, loc] = ismember(sprayCoolingMcadIdxes, allMcadIdxes);
+                nodeNamesInGroup = allNodeNames(loc);  % node names in the "Spray Cooling" group
+                
+                % Define the base spray cooling system names and their enable flags.
+                % (There is one flag per system; each will yield two rows: _F and _R.)
+                baseSysNames = {'Spray_RadialHousing', 'Spray_RadialRotor', 'Spray_AxialEndcap'};
+                baseSysEnables = [obj.Spray_RadialHousing_Enable, obj.Spray_RadialRotor_Enable, obj.Spray_AxialEndcap_Enable];
+                
+                % Define the two nozzle sides.
+                sides = {'_F', '_R'};
+                
+                % Loop over each base system.
+                for iSys = 1:length(baseSysNames)
+                    if baseSysEnables(iSys)
+                        for iSide = 1:length(sides)
+                            % Construct the expected node name substring for this subsystem.
+                            subSysName = [baseSysNames{iSys} sides{iSide}];
+                            
+                            % Identify the inlet index corresponding to this subSysName
+                            isThisSubSys = startsWith(nodeNamesInGroup, baseSysNames{iSys}) ...
+                                                & endsWith  (nodeNamesInGroup, sides{iSide});
+                            theseNodeMcadIdx = sprayCoolingMcadIdxes(isThisSubSys);
+
+                            % Add a new row for this cooling subsystem.
+                            csData(end+1,:) = {subSysName, theseNodeMcadIdx}; %#ok<AGROW> 
+                        end
+                    end
+                end
+            end
+        end
+
     end
 
 end
@@ -1160,86 +1423,246 @@ function [Amat, Bmat] = getStateSpaceMatricesFromThermalMatrices(CapMat, ResMat)
 
 end
 
-function [array1d, nodeNames] = readMfFile1D(FileName)
+function [array1d, mcadIdxes] = readMfFile1D(FileName)
+    %READMFFILE1D Reads a 1D Motor-CAD matrix file (.tmf, .cmf, .pmf) and
+    %extracts values and associated Motor-CAD indices from it.
+    %
+    % [array1d, mcadIdxes] = readMfFile1D(FileName)
+    %
+    % Inputs:
+    %   FileName - String. Path to the .tmf, .cmf, or .pmf file.
+    %
+    % Outputs:
+    %   array1d   - Numeric array. Values associated with each node.
+    %   mcadIdxes - Numeric array. Corresponding Motor-CAD indices of the nodes.
 
     fid = fopen(FileName, 'rt');
-    fgetl(fid); % first line not useful
-    fgetl(fid); % second line contains number of nodes
-    
-    datacell = textscan(fid, '%d%s%f', 'Delimiter',';', 'CollectOutput', 1);
+    if fid < 0
+        error('Cannot open the file: %s', FileName);
+    end
 
-    nodeNames = datacell{2};     %a cell array of strings
-    array1d = datacell{3};    %as a numeric array
+    % Skip header lines
+    headerLine1 = fgetl(fid); %#ok<NASGU>
+    headerLine2 = fgetl(fid); %#ok<NASGU>
+    headerLine3 = fgetl(fid); %#ok<NASGU> % Possibly the "Number of nodes" line
+
+    % Initialize containers
+    array1d = [];
+    mcadIdxes = [];
+
+    % Updated regular expression to handle lines with or without closing parenthesis
+    %
+    % Regex Explanation:
+    % -----------------------------------
+    % ^\s*                           - Match any leading whitespace at the start of the line
+    % (\d+)                          - Capture the node index (one or more digits) as Group 1
+    % .*?                            - Lazily match any characters (node name), allowing for incomplete names
+    % ([-]?\d+\.?\d*(?:[Ee][-+]?\d+)?) - Capture the numeric value (temperature) as Group 2
+    % \s*;?\s*$                      - Match optional whitespace and an optional semicolon until the end of the line
+    expr = '^\s*(\d+).*?([-]?\d+\.?\d*(?:[Ee][-+]?\d+)?)\s*;?\s*$';
+
+    lineNumber = 4; % Starting from the 4th line after headers
+
+    while true
+        thisLine = fgetl(fid);
+        if ~ischar(thisLine)
+            % End of file
+            break;
+        end
+        thisLine = strtrim(thisLine);
+        if isempty(thisLine)
+            % Skip empty lines
+            continue;
+        end
+        tokens = regexp(thisLine, expr, 'tokens', 'once');
+        if ~isempty(tokens)
+            idxStr = tokens{1};
+            valStr = tokens{2};
+
+            % Convert strings to appropriate types
+            mcadIdx = str2double(idxStr);
+            val = str2double(valStr);
+
+            % Append to arrays
+            mcadIdxes(end+1) = mcadIdx; %#ok<AGROW>
+            array1d(end+1) = val; %#ok<AGROW>
+        else
+            warning('Line %d in "%s" did not match expected pattern and was skipped.', lineNumber, FileName);
+        end
+        lineNumber = lineNumber + 1;
+    end
 
     fclose(fid);
 end
 
-function array2d = readMfFile2D(FileName, numNodes)
-
-    fileID = fopen(FileName,'r');
-
-    % If error exit
-    if fileID < 0
-        disp('Error loading the file, exit')
-        return
+function array2d = readMfFile2D(filename, numNodes)
+    fid = fopen(filename, 'r');
+    if fid < 0
+        error("Could not open file '%s'.", filename);
     end
-    
-    % Read first lines without useful info
-    textscan(fileID, '%[^\n\r]', 3, 'WhiteSpace', '', 'ReturnOnError', false, 'EndOfLine', '\r\n');
-    
-    % Read resistance values
-    formatSpec = '%s';    
-    % Read the resistance values. Extra node for ambient.
-    for i=1:numNodes
-        formatSpec = [formatSpec, '%f']; %#ok<AGROW> 
+
+    %-----------------------------------------------------------
+    % 1) Skip any fixed header lines you do not need
+    %-----------------------------------------------------------
+    for i = 1:4
+        fgetl(fid); % just discard these lines
     end
-    formatSpec = [formatSpec, '%[^\n\r]'];
-    dataArray = textscan(fileID, formatSpec, 'Delimiter', ';', 'TextType', 'string', 'ReturnOnError', false);
-    fclose(fileID);
-    
-    % Generate the resistace matrix
-    array2d = zeros(numNodes);
-    
-    % Create the matrix (R matrix in only 1 vector)
-    dtmp = cell2mat(dataArray(1,2:numNodes+1));
-    array2d(:) = dtmp(:);
-end
 
-function [GroupNames, NodeNames, GroupIdxs, NodeIdx] = readNmfFile(FileName)
+    % Initialize your matrix
+    array2d = zeros(numNodes, numNodes);
 
-    fid = fopen(FileName, 'rt');
-    fgetl(fid); % first line not useful
-    fgetl(fid); % second line contains number of nodes
-    fgetl(fid); % third line is whitespace
+    %-----------------------------------------------------------
+    % 2) Read line by line for 'numNodes' lines
+    %-----------------------------------------------------------
+    for row = 1:numNodes
+        line = fgetl(fid);
+        if ~ischar(line)
+            % If we hit end-of-file before reading numNodes lines
+            error('Unexpected end of file at line %d.', row + 3);
+        end
 
-    datacell = textscan(fid, '%s', 'CollectOutput', 1, 'Delimiter', newline);
-    datacell = datacell{1}; % data is one level below
+        %-------------------------------------------------------
+        % 3) Split the line by semicolons
+        %    (Adjust delimiter if needed; e.g. commas, spaces, etc.)
+        %-------------------------------------------------------
+        parts = strsplit(line, ';');
+        
+        % If the last split is empty (common when lines end in ";"), remove it.
+        if isempty(parts{end})
+            parts(end) = [];
+        end
 
-    numGroups = 0;
-    numNodes = 0;
-    GroupNames = {};
-    NodeNames = {};
-    GroupIdxs = {};
-    NodeIdx = {};
-    for idxLine = 1:length(datacell)
-        thisLine = datacell{idxLine};
-        if ~isempty(thisLine) % skip empty lines
-            if startsWith(thisLine, '[') % new group
-                % New group           
-                numGroups = numGroups+1;
-                GroupNames{end+1} = thisLine(2:end-1);     %#ok<AGROW> 
-                GroupIdxs{end+1} = []; %#ok<AGROW> 
-            else
-                % Keep adding to the current group
-                numNodes = numNodes+1;
-                nodeIdx = str2double(extractBefore(thisLine, ' '));
-                nodeName = extractAfter(thisLine, '('); % Assumes node name between parenthesis
-                nodeName = nodeName(1:end-1); % last character is ")"
-                NodeNames{end+1} = nodeName; %#ok<AGROW> 
-                NodeIdx{end+1} = nodeIdx; %#ok<AGROW> 
-                GroupIdxs{end}(end+1) = nodeIdx;
+        %-------------------------------------------------------
+        % 4) Convert each piece to a number when possible
+        %-------------------------------------------------------
+        numericVals = [];
+        for k = 1:numel(parts)
+            val = str2double(strtrim(parts{k}));
+            if ~isnan(val)
+                numericVals(end+1) = val; %#ok<AGROW>
             end
         end
+
+        %-------------------------------------------------------
+        % 5) Make sure we got exactly 'numNodes' numeric values
+        %    for this line. Adjust as needed for your file format.
+        %-------------------------------------------------------
+        if length(numericVals) < numNodes
+            % Probably the first chunk includes a truncated node name and
+            % the first numeric value (e.g. "192 (Spray_RadialHousing_Inlet_Flui 1000000000...")
+            % We need to extract that extra number and prepend it to numericVals.
+        
+            firstChunk = parts{1};  
+            % Use a regex to find all numbers in that chunk:
+            tokens = regexp(firstChunk,'([-+]?\d*\.?\d+(?:[eE][-+]?\d+)?)','match'); % matches numbers with int, float, and scientific format
+            % tokens might look like {"192","1000000000"}.
+        
+            if length(tokens) >= 2
+                % The second number is the data (first number is the Motor-CAD index, so skip)
+                firstElement = str2double(tokens{2});
+                % Prepend it to our existing numeric values
+                numericVals = [firstElement, numericVals]; %#ok<AGROW> 
+            else
+                fclose(fid);
+                error(['Could not recover a missing numeric value from line %d. ' ...
+                       'Check for truncation or missing delimiters.'], row + 3);
+            end
+        
+            % After fixing, make sure we now have enough data:
+            if length(numericVals) < numNodes
+                fclose(fid);
+                error('Still not enough data on line %d, even after attempted fix.', row + 3);
+            end
+        
+        elseif length(numericVals) > numNodes
+            fclose(fid);
+            error('Too many numeric elements on line %d. Check file format.', row + 3);
+        end
+
+        % Assign row data to the output matrix
+        array2d(row, :) = numericVals;
+    end
+
+    fclose(fid);
+end
+
+function [GroupNames, NodeNames, GroupIdxs, McadIdxs] = readNmfFile(FileName)
+    %READNMFFILE Reads a Node Grouping Matrix (.nmf) file and extracts group names,
+    %node names, and their corresponding Motor-CAD indices in a robust manner.
+    %
+    % [GroupNames, NodeNames, GroupIdxs, McadIdxs] = readNmfFile(FileName)
+    %
+    % Inputs:
+    %   FileName - String. Path to the .nmf file.
+    %
+    % Outputs:
+    %   GroupNames - Cell array of strings. Names of the groups.
+    %   NodeNames  - Cell array of strings. Names of the nodes.
+    %   GroupIdxs  - Cell array of numeric arrays. Motor-CAD indices of nodes in each group.
+    %   McadIdxs   - Cell array of doubles. Motor-CAD index of each node.
+
+    fid = fopen(FileName, 'rt');
+    if fid < 0
+        error('Cannot open the file: %s', FileName);
+    end
+
+    % Skip header lines
+    headerLine1 = fgetl(fid); %#ok<NASGU> 
+    headerLine2 = fgetl(fid); %#ok<NASGU> 
+    headerLine3 = fgetl(fid); %#ok<NASGU> 
+
+    GroupNames = {};
+    GroupIdxs  = {};
+    NodeNames  = {};
+    McadIdxs    = {};
+
+    currentGroup = '';
+    currentGroupIdxs = [];
+
+    while true
+        thisLine = fgetl(fid);
+        if ~ischar(thisLine)
+            % End of file
+            break;
+        end
+        thisLine = strtrim(thisLine);
+        if isempty(thisLine)
+            % Skip empty lines
+            continue;
+        end
+        if startsWith(thisLine, '[') && endsWith(thisLine, ']')
+            % New group definition, e.g., [Armature Winding (Active)]
+            % Store the previous group if it exists
+            if ~isempty(currentGroup)
+                GroupNames{end+1} = currentGroup; %#ok<AGROW>
+                GroupIdxs{end+1}  = currentGroupIdxs; %#ok<AGROW>
+            end
+            % Start a new group
+            currentGroup = thisLine(2:end-1);  % Remove the [ and ]
+            currentGroupIdxs = [];
+        else
+            % Expected format: "Index (Name)" e.g., "342 (Wedge)"
+            expr = '^(\d+)\s*\((.*)\)$';
+            tokens = regexp(thisLine, expr, 'tokens', 'once');
+            if ~isempty(tokens)
+                idxStr    = tokens{1};
+                nameStr   = tokens{2};
+                idxVal    = str2double(idxStr);
+                nodeName  = stripOuterParentheses(nameStr);
+
+                NodeNames{end+1} = nodeName; %#ok<AGROW>
+                McadIdxs{end+1}   = idxVal;   %#ok<AGROW>
+                currentGroupIdxs(end+1) = idxVal; %#ok<AGROW>
+            else
+                warning('Line "%s" did not match expected pattern in %s', thisLine, FileName);
+            end
+        end
+    end
+
+    % Store the last group
+    if ~isempty(currentGroup)
+        GroupNames{end+1} = currentGroup;
+        GroupIdxs{end+1}  = currentGroupIdxs;
     end
 
     fclose(fid);
@@ -1301,4 +1724,53 @@ function samplingGridStruct = getSamplingGridFromBkpts(BkptsStruct)
 
     samplingGridStruct = cell2struct(samplingGridValues, fieldNamesCell, 1);
 
+end
+
+function nodeNameOut = stripOuterParentheses(nodeNameIn)
+    %STRIPOUTERPARENTHESES Removes the outermost parentheses from a node name if present.
+    %
+    % nodeNameOut = stripOuterParentheses(nodeNameIn) returns the node name
+    % with the outermost '(' and ')' removed if they exist. Otherwise, returns
+    % the original node name unchanged.
+    
+    nodeNameIn = strtrim(nodeNameIn);  % Remove leading/trailing whitespace
+    if startsWith(nodeNameIn, '(') && endsWith(nodeNameIn, ')')
+        % Remove the very first '(' and the very last ')'
+        nodeNameOut = nodeNameIn(2:end-1);
+    else
+        nodeNameOut = nodeNameIn;
+    end
+end
+
+function a = adaptInletOutletArrays(c)
+    arguments
+        c (1,:) cell
+    end
+    %   A = adaptInletOutletArrays(C) takes a 1×N cell array C whose elements
+    %   are numeric vectors (row- or column-oriented) and returns a MxN
+    %   double array where M is the length of the longest element in C and
+    %   the rows that don't have enough elements have repeated the first
+    %   element of the row to fit the MxN size
+    %
+    %   Example:
+    %     c = {[0]; [1,2,3]; [4;5;6]; [7 8]};
+    %     a = adaptInletOutletArrays(c);
+    %     % a is [0 0 0; 1 2 3; 4 5 6; 7 8 7]
+
+    % Find the length of each vector and the overall maximum length (M)
+    vecLen = cellfun(@numel, c);
+    M      = max(vecLen);        % longest vector length
+    N      = numel(c);           % number of vectors / rows in the output
+
+    % Pre-allocate the result (each input vector becomes one row)
+    a = zeros(N, M);
+
+    % Build each row, padding with the vector’s first element when needed
+    for k = 1:N
+        v = c{k}(:).';           % force row orientation
+        if numel(v) < M
+            v = [v repmat(v(1), 1, M - numel(v))]; %#ok<AGROW> 
+        end
+        a(k, :) = v;
+    end
 end

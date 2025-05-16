@@ -1,4 +1,4 @@
-function maxTempError = compareSimulinkAndMcadAtBkpt(modelName, motFile, bkptIdxComb, torqueVal)
+function maxTempError = compareSimulinkAndMcadAtBkpt(modelName, mcadIntf, bkptIdxComb, torqueVal)
     % COMPARESIMULINKANDMCADATBKPT returns the maximum temperature absolute
     % difference between Simulink and Motor-CAD in a transient simulation 
     % with specified torque, at a particular combination of breakpoints.
@@ -7,7 +7,7 @@ function maxTempError = compareSimulinkAndMcadAtBkpt(modelName, motFile, bkptIdx
     % Input arguments:
     % - modelName: [string/char]: model name of the SROTM, previously generated
     % with generateSimulinkReducedOrderModel
-    % - motFile: [string/char]: Motor-CAD .mot file to compare against.
+    % - mcadIntf: [mcadinterface.ThermalInterface object]: pre-loaded ThermalInterface object
     % - bkptIdxComb: [int]: Array of breakpoint indices of speed, flow
     % rate, and inlet temperature to use for the comparison.
     % - torqueVal: [double]: Value of shaft torque for the comparison.
@@ -44,8 +44,21 @@ function maxTempError = compareSimulinkAndMcadAtBkpt(modelName, motFile, bkptIdx
 
     set_param(strcat(modelName, '/TorqueNm'), 'Value', num2str(torqueVal));
     set_param(strcat(modelName, '/SpeedRPM'), 'Value', num2str(rpmVal));
-    set_param(strcat(modelName, '/HousingWaterJacket_Flowrate_lpm'), 'Value', num2str(fr1Val));
-    set_param(strcat(modelName, '/HousingWaterJacket_InletTemp_degC'), 'Value', num2str(Tin1Val));
+    % set HWJ for e8 model
+    try
+        set_param(strcat(modelName, '/HousingWaterJacket_Flowrate_lpm'), 'Value', num2str(fr1Val));
+        set_param(strcat(modelName, '/HousingWaterJacket_InletTemp_degC'), 'Value', num2str(Tin1Val));
+    catch
+        % just continue
+    end
+    % set spray cooling for e8 model
+    try
+        set_param(strcat(modelName, '/Spray_RadialHousing_Flowrate_lpm'), 'Value', num2str(fr1Val));
+        set_param(strcat(modelName, '/Spray_RadialHousing_InletTemp_degC'), 'Value', num2str(Tin1Val));
+    catch
+        % just continue
+    end
+
     if length(bkptIdxComb)==5
         set_param(strcat(modelName, '/Ventilated_Flowrate_lpm'), 'Value', num2str(fr2Val));
         set_param(strcat(modelName, '/Ventilated_InletTemp_degC'), 'Value', num2str(Tin2Val));
@@ -55,23 +68,25 @@ function maxTempError = compareSimulinkAndMcadAtBkpt(modelName, motFile, bkptIdx
     out = sim(modelName, 'StopTime', num2str(stopTime));
     TnodesSeries = out.yout{1}.Values;
 
-    McadIntf = mcadinterface.ThermalInterface(motFile);
     TnodesInit = mdlWks.getVariable('TnodesInit');
-    McadIntf.Tambient_degC = TnodesInit(1);
-    McadIntf.Shaft_Speed_RPM = rpmVal;
-    McadIntf.HousingWaterJacket_FlowRate_m3ps = fr1Val/60/1000; % lpm to m3ps
-    McadIntf.HousingWaterJacket_InletTemperature_degC = Tin1Val;
+    mcadIntf.Tambient_degC = TnodesInit(1);
+    mcadIntf.Shaft_Speed_RPM = rpmVal;
+    mcadIntf.HousingWaterJacket_FlowRate_m3ps = fr1Val/60/1000; % lpm to m3ps
+    mcadIntf.HousingWaterJacket_InletTemperature_degC = Tin1Val;
+    mcadIntf.Spray_RadialHousing_FlowRate_m3ps = fr1Val/60/1000; % lpm to m3ps
+    mcadIntf.Spray_RadialHousing_InletTemperature_F_degC = Tin1Val;
+    mcadIntf.Spray_RadialHousing_InletTemperature_R_degC = Tin1Val;
     if length(bkptIdxComb)==5
-        McadIntf.Ventilated_FlowRate_m3ps = fr2Val/60/1000; % lpm to m3ps
-        McadIntf.Ventilated_InletTemperature_degC = Tin2Val;
+        mcadIntf.Ventilated_FlowRate_m3ps = fr2Val/60/1000; % lpm to m3ps
+        mcadIntf.Ventilated_InletTemperature_degC = Tin2Val;
     end
-    McadIntf.EnableStatorTempCoeffRes = 1;
-    McadIntf.EnableRotorTempCoeffRes = 1;
-    McadIntf.updateModel();    
+    mcadIntf.EnableStatorTempCoeffRes = 1;
+    mcadIntf.EnableRotorTempCoeffRes = 1;
+    mcadIntf.updateModel();    
     numTimeSteps = 50;
-    McadIntf.runThermalTransientWithSpecifiedTorqueSpeed(torqueVal, rpmVal, stopTime, numTimeSteps)
-    allMcadIdxs = [McadIntf.NodeNamesAndMcadIdx{:,2}];
-    [tVecMcad, TnodesMcad] = McadIntf.getTransientTemperatureForNodeMcadIdxs(allMcadIdxs);
+    mcadIntf.runThermalTransientWithSpecifiedTorqueSpeed(torqueVal, rpmVal, stopTime, numTimeSteps)
+    allMcadIdxs = [mcadIntf.NodeNamesAndMcadIdx{:,2}];
+    [tVecMcad, TnodesMcad] = mcadIntf.getTransientTemperatureForNodeMcadIdxs(allMcadIdxs);
 
     TnodesMcadSeries = timeseries(TnodesMcad', tVecMcad);
     [TnodesMcadSeries,TnodesSeries] = synchronize(TnodesMcadSeries,TnodesSeries,'Union');

@@ -196,8 +196,8 @@ classdef tThermalInterface < matlab.unittest.TestCase
 
             [AdjacencyMat, InletArrayIdxs, OutletArrayIdxs, CoolantArrayIdxs] = test.objectUnderTest.getAdjacencyMatAndInletOutletIdxs();
 
-            test.verifyEqual(InletArrayIdxs, 26, 'Inlet indexes do not match expected value');
-            test.verifyEqual(OutletArrayIdxs, 21, 'Outlet indexes do not match expected value');
+            test.verifyEqual(InletArrayIdxs, {26}, 'Inlet indexes do not match expected value');
+            test.verifyEqual(OutletArrayIdxs, {21}, 'Outlet indexes do not match expected value');
             test.verifyEqual(CoolantArrayIdxs, [21; 26], 'Coolant indexes do not match expected value');
             test.verifyEqual(AdjacencyMat(26,21), 1, 'Connectivity of adjacency mat for nodes 29->132 is not correct');
             test.verifyEqual(AdjacencyMat(21,26), 0, 'Connectivity of adjacency mat for nodes 29->132 is not correct');
@@ -316,8 +316,10 @@ classdef tThermalInterface < matlab.unittest.TestCase
             test.verifyEqual(size(AdjacencyMat), [150,150],'Size of AdjacencyMat not equal to expected value');
             
             torVal = 50; % N*m
-            maxTempError111 = compareSimulinkAndMcadAtBkpt(modelName, test.realMotFile{1}, [1,1,1], torVal);
-            maxTempError222 = compareSimulinkAndMcadAtBkpt(modelName, test.realMotFile{1}, [2,2,2], torVal);
+            motFile = test.realMotFile{1};
+            mcadIntf = mcadinterface.ThermalInterface(motFile);
+            maxTempError111 = compareSimulinkAndMcadAtBkpt(modelName, mcadIntf, [1,1,1], torVal);
+            maxTempError222 = compareSimulinkAndMcadAtBkpt(modelName, mcadIntf, [2,2,2], torVal);
             Ttol = 2; % degC
             test.verifyLessThan(maxTempError111, Ttol, 'Max temperature error is not acceptable for [1,1,1] breakpoints');
             test.verifyLessThan(maxTempError222, Ttol, 'Max temperature error is not acceptable for [2,2,2] breakpoints');

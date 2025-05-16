@@ -4,7 +4,7 @@ classdef (Abstract) AbstractInterface < handle
     % The client interface classes require a mapping of Motor-CAD parameter
     % names to MATLAB parameter names.
     
-    % Copyright 2022-2024 The MathWorks, Inc.
+    % Copyright 2022-2025 The MathWorks, Inc.
     
     properties(Abstract, Constant, Access=protected)
         McadParameterNameList cell % Motor-CAD parameter names list
@@ -44,6 +44,18 @@ classdef (Abstract) AbstractInterface < handle
             % Get parameter value from Motor-CAD
             idxParam = strcmp(obj.ParameterNameList, paramName);
             paramValue = obj.McadParameterValuesList{idxParam};
+        end
+
+        function view(obj, flag)
+        %VIEW Toggle Motor-CAD GUI visibility
+        %
+        %   VIEW(OBJ, FLAG) shows or hides the Motor-CAD GUI associated with OBJ.
+        %   FLAG must be a logical scalar: true to show the GUI, false to hide it.
+            arguments
+                obj
+                flag (1,1) logical    % true = show GUI; false = hide GUI
+            end
+            obj.mcad.set_visible(flag);
         end
 
         function delete(obj)

@@ -8,6 +8,7 @@ classdef tExampleModels < matlab.unittest.TestCase
         modelsToTest = {
             'e5_IM_HWJ_ROM'; 
             'e8_IPMSM_HWJandVent_ROM'; 
+            'e8_PMSM_SprayMultiNozzle_ROM'; 
             'DriveCycle_e8_IPMSM_HWJandVent_ROM'; 
             'SimscapeSystemLevel_e8_IPMSM_HWJandVent_ROM';
         }
