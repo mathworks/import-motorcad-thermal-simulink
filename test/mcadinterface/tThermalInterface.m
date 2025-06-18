@@ -343,5 +343,97 @@ classdef tThermalInterface < matlab.unittest.TestCase
             end
 
         end
+
+        function checkBkptsStructErrorWhenMissingRequiredField(test)
+            % Missing the mandatory 'w' field
+            BkptsStruct = struct( ...
+                'fr1',  [3 10], ...
+                'Tin1', [20 40] ...
+            );
+            expectedMessage = 'BkptsStruct is missing required field(s): w';
+            modelName = "dummyName";
+            coolingSystemsEnabled = {'Housing Water Jacket'};
+            try
+                test.objectUnderTest.generateSimulinkReducedOrderModel(modelName, coolingSystemsEnabled, BkptsStruct);
+                test.verifyFail('Expected an error for missing required field, but none was thrown.');
+            catch ME
+                test.verifyEqual(ME.message, expectedMessage);
+            end
+        end
+    
+    
+        function checkBkptsStructErrorWhenInvalidFieldName(test)
+            % Contains an unexpected field name 'foo'
+            BkptsStruct = struct( ...
+                'w',    [1 2], ...
+                'fr1',  [3 4], ...
+                'Tin1', [5 6], ...
+                'foo',  [7 8] ...
+            );
+            expectedMessage = 'Invalid field name "foo" for BkptsStruct. Allowed names: w, frN, TinN';
+            modelName = "dummyName";
+            coolingSystemsEnabled = {'Housing Water Jacket'};
+            try
+                test.objectUnderTest.generateSimulinkReducedOrderModel(modelName, coolingSystemsEnabled, BkptsStruct);
+                test.verifyFail('Expected an error for invalid field name, but none was thrown.');
+            catch ME
+                test.verifyEqual(ME.message, expectedMessage);
+            end
+        end
+    
+    
+        function checkBkptsStructErrorWhenPairingMismatch(test)
+            % Has Tin2 but no corresponding fr2
+            BkptsStruct = struct( ...
+                'w',    [1 2], ...
+                'fr1',  [3 4], ...
+                'Tin1', [5 6], ...
+                'Tin2', [7 8] ...
+            );
+            expectedMessage = 'Each "frN" field must have a matching "TinN" field (and vice-versa).';
+            modelName = "dummyName";
+            coolingSystemsEnabled = {'Housing Water Jacket', 'Ventilated'};
+            try
+                test.objectUnderTest.generateSimulinkReducedOrderModel(modelName, coolingSystemsEnabled, BkptsStruct);
+                test.verifyFail('Invalid BkptsStruct. Expected an error for frN/TinN pairing mismatch, but none was thrown.');
+            catch ME
+                test.verifyEqual(ME.message, expectedMessage);
+            end
+        end
+    
+    
+        function checkBkptsStructErrorWhenFieldTooShort(test)
+            % 'fr1' has only one element
+            BkptsStruct = struct( ...
+                'w',    [1000 2000], ...
+                'fr1',  3, ...                % <-- only one value
+                'Tin1', [20 40] ...
+            );
+            expectedMessage = 'Invalid BkptsStruct. Field "fr1" must contain at least two values.';
+            modelName = "dummyName";
+            coolingSystemsEnabled = {'Housing Water Jacket'};
+            try
+                test.objectUnderTest.generateSimulinkReducedOrderModel(modelName, coolingSystemsEnabled, BkptsStruct);
+                test.verifyFail('Expected an error for field with <2 values, but none was thrown.');
+            catch ME
+                test.verifyEqual(ME.message, expectedMessage);
+            end
+        end
+    
+    
+        function checkBkptsStructErrorWhenStructNotScalar(test)
+            % Two-element struct array instead of scalar struct
+            tmp = struct('w',[1 2],'fr1',[3 4],'Tin1',[5 6]);
+            BkptsStruct = repmat(tmp, 1, 2);   % 1×2 array
+            expectedMessage = 'BkptsStruct must be a scalar struct.';
+            modelName = "dummyName";
+            coolingSystemsEnabled = {'Housing Water Jacket'};
+            try
+                test.objectUnderTest.generateSimulinkReducedOrderModel(modelName, coolingSystemsEnabled, BkptsStruct);
+                test.verifyFail('Expected an error for non-scalar struct, but none was thrown.');
+            catch ME
+                test.verifyEqual(ME.message, expectedMessage);
+            end
+        end
     end
 end

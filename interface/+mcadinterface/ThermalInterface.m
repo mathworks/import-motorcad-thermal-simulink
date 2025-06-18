@@ -883,6 +883,8 @@ classdef ThermalInterface < mcadinterface.BasicInterface
             % coolant flow rates, and coolant inlet temperatures). The ROM
             % interpolates the state-space arrays between breakpoints.
             
+            assertBkptsStruct(BkptsStruct);
+
             obj.turnOffLossDependenceWithTemperatureOrSpeed();
 
             % 1) COMPUTE ROM DATA
@@ -1772,5 +1774,74 @@ function a = adaptInletOutletArrays(c)
             v = [v repmat(v(1), 1, M - numel(v))]; %#ok<AGROW> 
         end
         a(k, :) = v;
+    end
+end
+
+function assertBkptsStruct(BkptsStruct)
+%ASSERTBKPTSSTRUCT  Validate breakpoint-definition struct.
+%
+% Rules enforced
+% ---------------
+% 1) BkptsStruct must be a scalar struct.
+% 2) Required fields:  w, fr1, Tin1
+% 3) Any other field must match  frN  or  TinN  where N is an integer ≥ 2.
+% 4) Every frN must have a matching TinN with the same N (and vice-versa).
+% 5) Every field’s value must contain at least two elements.
+%
+% Throws a descriptive error if any check fails.
+
+    %-- Basic struct check
+    if ~isstruct(BkptsStruct) || numel(BkptsStruct) ~= 1
+        error('BkptsStruct must be a scalar struct.');
+    end
+
+    fn = fieldnames(BkptsStruct);
+
+    %-- (2) Required fields present?
+    req = {'w','fr1','Tin1'};
+    missing = setdiff(req, fn);
+    if ~isempty(missing)
+        error('BkptsStruct is missing required field(s): %s', strjoin(missing, ', '));
+    end
+
+    %-- (3) / (4) Validate names and pairing
+    frNums  = [];   % numeric suffixes for frN fields
+    tinNums = [];   % numeric suffixes for TinN fields
+    for k = 1:numel(fn)
+        name = fn{k};
+
+        % Allow only: 'w', 'frN', 'TinN'
+        if strcmp(name,'w')
+            continue
+        end
+
+        m = regexp(name,'^(fr|Tin)(\d+)$','tokens','once');
+        if isempty(m)
+            error('Invalid field name "%s" for BkptsStruct. Allowed names: w, frN, TinN', name);
+        end
+
+        suffix = str2double(m{2});
+        if suffix < 1 || floor(suffix) ~= suffix
+            error('BkptsStruct field "%s" has invalid suffix (must be an integer ≥ 1).', name);
+        end
+
+        if strcmp(m{1},'fr')
+            frNums(end+1)  = suffix;  %#ok<AGROW>
+        else
+            tinNums(end+1) = suffix;  %#ok<AGROW>
+        end
+    end
+
+    % Make sure frN/TinN pairs match exactly
+    if ~isequal(sort(frNums), sort(tinNums))
+        error('Invalid BkptsStruct. Each "frN" field must have a matching "TinN" field (and vice-versa).');
+    end
+
+    %-- (1) / (5) Check that each field has ≥ 2 values
+    for k = 1:numel(fn)
+        v = BkptsStruct.(fn{k});
+        if numel(v) < 2
+            error('Invalid BkptsStruct. Field "%s" must contain at least two values.', fn{k});
+        end
     end
 end
