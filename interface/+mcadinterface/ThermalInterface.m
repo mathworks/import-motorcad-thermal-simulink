@@ -887,7 +887,7 @@ classdef ThermalInterface < mcadinterface.BasicInterface
 
             obj.turnOffLossDependenceWithTemperatureOrSpeed();
 
-            % 1) COMPUTE ROM DATA
+            % 1) COMPUTE ROM DATA  ---------------------------------------
             
             % Enable the cooling systems and get the flowrate and inlet
             % temperature property names.
@@ -912,6 +912,7 @@ classdef ThermalInterface < mcadinterface.BasicInterface
                 end
             end
             obj.updateModel();
+            AdjacencyMat = obj.AdjacencyMat;
 
             % Get ambient temperature and initial node temperatures
             Tambient_degC =  obj.Tambient_degC;
@@ -942,18 +943,47 @@ classdef ThermalInterface < mcadinterface.BasicInterface
             samplingGridStruct = getSamplingGridFromBkpts(BkptsStruct);
             StateSpaceND.SamplingGrid = samplingGridStruct;
             
-            % Get coolant data
-            AdjacencyMat = obj.AdjacencyMat;
+            % Build inlet/outlet index rows that match coolingSystemsEnabled one-to-one
+            numCoolSys   = numel(coolingSystemsEnabled);
+            inletCells   = cell(1,numCoolSys);
+            outletCells  = cell(1,numCoolSys);           
+            for kSys = 1:numCoolSys
+                csName = coolingSystemsEnabled{kSys};
+                % identify which rows in the object belong to csName
+                if any(startsWith(obj.MultiNozzleSprayCoolingSystems, string(csName))) % is multi-nozzle spray cooling (front and rear)
+                    % Multi-nozzle aggregate: collect all spray rows
+                    rowMask = ismember(obj.CoolingSystemNamesAndMcadIdxes(:,1), ...
+                                       obj.MultiNozzleSprayCoolingSystems);
+                else
+                    % Normal case: exact match
+                    rowMask = strcmp(obj.CoolingSystemNamesAndMcadIdxes(:,1), csName);
+                end
+                rows = find(rowMask);
+                if isempty(rows)
+                    error(['Cooling system "%s" is not enabled in Motor-CAD (or its ' ...
+                           'name does not match SupportedCoolingSystemsMcadNames).'], csName);
+                end
+                % concatenate indices from all matching rows
+                inIdx  = [];
+                outIdx = [];
+                for r = rows(:)'
+                    inIdx  = [inIdx  obj.InletArrayIdxs{r}];           %#ok<AGROW>
+                    tmpOut = obj.OutletArrayIdxs{r};
+                    if isempty(tmpOut)          % per-element fallback
+                        tmpOut = obj.InletArrayIdxs{r};
+                    end
+                    outIdx = [outIdx tmpOut];   %#ok<AGROW>
+                end
+                inletCells{kSys}  = inIdx;
+                outletCells{kSys} = outIdx;
+            end
+            obj.InletArrayIdxs = inletCells;
+            obj.OutletArrayIdxs = outletCells;
+
             % Simulink does not accept cell arrays as parameters, need to
             % transform them to arrays:
             InletCoolIdxs = adaptInletOutletArrays(obj.InletArrayIdxs); 
             OutletCoolIdxs = adaptInletOutletArrays(obj.OutletArrayIdxs);
-            % Some cooling systems (multinozzle spray) have no outlet node in Motor-CAD.
-            if isempty(OutletCoolIdxs)
-                % FixMe: temporary workaround, assume outlet=inlet (no heat transfer)
-                OutletCoolIdxs = InletCoolIdxs;
-                % TO DO: estimate outlet coolant temperature from the heat transfer
-            end
             
             % Calculate state-space model at each breakpoint -------
             idxsCell = getNestedForLoopIdxs(sizeMatND(1:end-2));
@@ -1036,7 +1066,8 @@ classdef ThermalInterface < mcadinterface.BasicInterface
             xCoolantArrayIdxs = obj.CoolantArrayIdxs;            
             xCapMat = obj.CapMat;
 
-            % 2) GENERATE SIMULINK MODEL
+            % 2) GENERATE SIMULINK MODEL ---------------------------------
+            
             disp("Creating Simulink model...")
             % create and open the model
             open_system(new_system(modelName));
