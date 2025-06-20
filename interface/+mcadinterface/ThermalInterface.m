@@ -877,11 +877,19 @@ classdef ThermalInterface < mcadinterface.BasicInterface
 
         function [AmatND, BmatND, ResMatND, TnodesInit, ...
                   AdjacencyMat, InletCoolIdxs, OutletCoolIdxs] = generateSimulinkReducedOrderModel(obj, modelName, ...
-                         coolingSystemsEnabled, BkptsStruct)
+                         coolingSystemsEnabled, BkptsStruct, options)
             % Generate a Simulink model implementing a ROM consisting of a 
             % set of state-space models at certain breakpoints (shaft speeds, 
             % coolant flow rates, and coolant inlet temperatures). The ROM
             % interpolates the state-space arrays between breakpoints.
+
+            arguments
+                obj
+                modelName (1,1) string
+                coolingSystemsEnabled (1,:) cell
+                BkptsStruct (1,1) struct
+                options.DCBusVoltage = []
+            end
             
             assertBkptsStruct(BkptsStruct);
 
@@ -910,6 +918,9 @@ classdef ThermalInterface < mcadinterface.BasicInterface
                 else % normal case
                     TinPropNames{idxCoolingSys} = strcat(erase(thisCoolingSys, ' '), '_InletTemperature_degC');
                 end
+            end
+            if numel(options.DCBusVoltage)==1
+                obj.DCBusVoltage=options.DCBusVoltage;
             end
             obj.updateModel();
             AdjacencyMat = obj.AdjacencyMat;
@@ -1039,21 +1050,75 @@ classdef ThermalInterface < mcadinterface.BasicInterface
                 end               
             end       
 
-            % re-interpolate tables in a grid
-            [ShaftTorqueVec, SpeedVec, xStator_Copper_Loss_Mat] = reInterpolateTable(obj.Shaft_Torque_Mat, obj.Speed_Mat, obj.Stator_Copper_Loss_Mat);
-            [~,~,xRotor_Cage_Loss_Mat] = reInterpolateTable(obj.Shaft_Torque_Mat, obj.Speed_Mat, obj.Rotor_Cage_Loss_Mat);
-            [~,~,xIron_Loss_Stator_Back_Iron_Mat] = reInterpolateTable(obj.Shaft_Torque_Mat, obj.Speed_Mat, obj.Iron_Loss_Stator_Back_Iron_Mat);
-            [~,~,xIron_Loss_Stator_Tooth_Mat] = reInterpolateTable(obj.Shaft_Torque_Mat, obj.Speed_Mat, obj.Iron_Loss_Stator_Tooth_Mat);
-            [~,~,xStray_Load_Loss_Mat] = reInterpolateTable(obj.Shaft_Torque_Mat, obj.Speed_Mat, obj.Stray_Load_Loss_Mat);
-            [~,~,xMagnet_Loss_Mat] = reInterpolateTable(obj.Shaft_Torque_Mat, obj.Speed_Mat, obj.Magnet_Loss_Mat);
-            [~,~,xIron_Loss_Rotor_Pole_Mat] = reInterpolateTable(obj.Shaft_Torque_Mat, obj.Speed_Mat, obj.Iron_Loss_Rotor_Pole_Mat);
-            [~,~,xIron_Loss_Rotor_Back_Iron_Mat] = reInterpolateTable(obj.Shaft_Torque_Mat, obj.Speed_Mat, obj.Iron_Loss_Rotor_Back_Iron_Mat);
-            [~,~,xIron_Loss_Rotor_Tooth_Mat] = reInterpolateTable(obj.Shaft_Torque_Mat, obj.Speed_Mat, obj.Iron_Loss_Rotor_Tooth_Mat);
-            [~,~,xFriction_Loss_Mat] = reInterpolateTable(obj.Shaft_Torque_Mat, obj.Speed_Mat, obj.Friction_Loss_Mat);
-            [~,~,xWindage_Loss_Mat] = reInterpolateTable(obj.Shaft_Torque_Mat, obj.Speed_Mat, obj.Windage_Loss_Mat);  
-            [~,~,xStator_Copper_Loss_AC_Mat] = reInterpolateTable(obj.Shaft_Torque_Mat, obj.Speed_Mat, obj.Stator_Copper_Loss_AC_Mat);  
-            [~,~,xBanding_Loss_Mat] = reInterpolateTable(obj.Shaft_Torque_Mat, obj.Speed_Mat, obj.Banding_Loss_Mat);  
-            [~,~,xSleeve_Loss_Mat] = reInterpolateTable(obj.Shaft_Torque_Mat, obj.Speed_Mat, obj.Sleeve_Loss_Mat);  
+            if numel(options.DCBusVoltage) > 1 % 3-D loss maps (LossMapsWithDCV)
+                disp("Calculating losses at each DC Bus Voltage breakpoint ...")
+                % Pre-allocate array sizes
+                [ShaftTorqueVec, SpeedVec, ~] = reInterpolateTable( ...
+                        obj.Shaft_Torque_Mat, obj.Speed_Mat, obj.Stator_Copper_Loss_Mat);
+                DCBusVoltageVec = options.DCBusVoltage; 
+                nX = numel(ShaftTorqueVec);           % Torque axis length
+                nY = numel(SpeedVec);                 % Speed  axis length
+                nZ = numel(DCBusVoltageVec);     % Voltage sweep length           
+                % Each loss map has size [speed  × torque × voltage]
+                xStator_Copper_Loss_Mat          = zeros(nX, nY, nZ);
+                xRotor_Cage_Loss_Mat             = zeros(nX, nY, nZ);
+                xIron_Loss_Stator_Back_Iron_Mat  = zeros(nX, nY, nZ);
+                xIron_Loss_Stator_Tooth_Mat      = zeros(nX, nY, nZ);
+                xStray_Load_Loss_Mat             = zeros(nX, nY, nZ);
+                xMagnet_Loss_Mat                 = zeros(nX, nY, nZ);
+                xIron_Loss_Rotor_Pole_Mat        = zeros(nX, nY, nZ);
+                xIron_Loss_Rotor_Back_Iron_Mat   = zeros(nX, nY, nZ);
+                xIron_Loss_Rotor_Tooth_Mat       = zeros(nX, nY, nZ);
+                xFriction_Loss_Mat               = zeros(nX, nY, nZ);
+                xWindage_Loss_Mat                = zeros(nX, nY, nZ);
+                xStator_Copper_Loss_AC_Mat       = zeros(nX, nY, nZ);
+                xBanding_Loss_Mat                = zeros(nX, nY, nZ);
+                xSleeve_Loss_Mat                 = zeros(nX, nY, nZ);
+            
+                % Sweep the DC-bus voltages, refresh Motor-CAD, and stack the resulting 2-D maps into the pre-allocated 3-D arrays.
+                for idxDCV = 1:nZ
+
+                    disp("  DCBusVoltage = " + num2str(DCBusVoltageVec(idxDCV)) + " V");
+                    % -- Set the DCV value in Motor-CAD
+                    obj.DCBusVoltage =  DCBusVoltageVec(idxDCV);
+            
+                    % -- Ask Motor-CAD to recalculate loss tables at this voltage
+                    obj.calculateMagneticLab(); % force lab .mat file refresh
+                    obj.updateLabLossTables();
+            
+                    % -- Re-interpolate each refreshed loss table onto the common grid
+                    [~,~,xStator_Copper_Loss_Mat(:,:,idxDCV)]         = reInterpolateTable(obj.Shaft_Torque_Mat, obj.Speed_Mat, obj.Stator_Copper_Loss_Mat);
+                    [~,~,xRotor_Cage_Loss_Mat(:,:,idxDCV)]            = reInterpolateTable(obj.Shaft_Torque_Mat, obj.Speed_Mat, obj.Rotor_Cage_Loss_Mat);
+                    [~,~,xIron_Loss_Stator_Back_Iron_Mat(:,:,idxDCV)] = reInterpolateTable(obj.Shaft_Torque_Mat, obj.Speed_Mat, obj.Iron_Loss_Stator_Back_Iron_Mat);
+                    [~,~,xIron_Loss_Stator_Tooth_Mat(:,:,idxDCV)]     = reInterpolateTable(obj.Shaft_Torque_Mat, obj.Speed_Mat, obj.Iron_Loss_Stator_Tooth_Mat);
+                    [~,~,xStray_Load_Loss_Mat(:,:,idxDCV)]            = reInterpolateTable(obj.Shaft_Torque_Mat, obj.Speed_Mat, obj.Stray_Load_Loss_Mat);
+                    [~,~,xMagnet_Loss_Mat(:,:,idxDCV)]                = reInterpolateTable(obj.Shaft_Torque_Mat, obj.Speed_Mat, obj.Magnet_Loss_Mat);
+                    [~,~,xIron_Loss_Rotor_Pole_Mat(:,:,idxDCV)]       = reInterpolateTable(obj.Shaft_Torque_Mat, obj.Speed_Mat, obj.Iron_Loss_Rotor_Pole_Mat);
+                    [~,~,xIron_Loss_Rotor_Back_Iron_Mat(:,:,idxDCV)]  = reInterpolateTable(obj.Shaft_Torque_Mat, obj.Speed_Mat, obj.Iron_Loss_Rotor_Back_Iron_Mat);
+                    [~,~,xIron_Loss_Rotor_Tooth_Mat(:,:,idxDCV)]      = reInterpolateTable(obj.Shaft_Torque_Mat, obj.Speed_Mat, obj.Iron_Loss_Rotor_Tooth_Mat);
+                    [~,~,xFriction_Loss_Mat(:,:,idxDCV)]              = reInterpolateTable(obj.Shaft_Torque_Mat, obj.Speed_Mat, obj.Friction_Loss_Mat);
+                    [~,~,xWindage_Loss_Mat(:,:,idxDCV)]               = reInterpolateTable(obj.Shaft_Torque_Mat, obj.Speed_Mat, obj.Windage_Loss_Mat);
+                    [~,~,xStator_Copper_Loss_AC_Mat(:,:,idxDCV)]      = reInterpolateTable(obj.Shaft_Torque_Mat, obj.Speed_Mat, obj.Stator_Copper_Loss_AC_Mat);
+                    [~,~,xBanding_Loss_Mat(:,:,idxDCV)]               = reInterpolateTable(obj.Shaft_Torque_Mat, obj.Speed_Mat, obj.Banding_Loss_Mat);
+                    [~,~,xSleeve_Loss_Mat(:,:,idxDCV)]                = reInterpolateTable(obj.Shaft_Torque_Mat, obj.Speed_Mat, obj.Sleeve_Loss_Mat);
+                end
+            else % 2D loss maps
+                % re-interpolate tables in a grid
+                [ShaftTorqueVec, SpeedVec, xStator_Copper_Loss_Mat] = reInterpolateTable(obj.Shaft_Torque_Mat, obj.Speed_Mat, obj.Stator_Copper_Loss_Mat);
+                [~,~,xRotor_Cage_Loss_Mat] = reInterpolateTable(obj.Shaft_Torque_Mat, obj.Speed_Mat, obj.Rotor_Cage_Loss_Mat);
+                [~,~,xIron_Loss_Stator_Back_Iron_Mat] = reInterpolateTable(obj.Shaft_Torque_Mat, obj.Speed_Mat, obj.Iron_Loss_Stator_Back_Iron_Mat);
+                [~,~,xIron_Loss_Stator_Tooth_Mat] = reInterpolateTable(obj.Shaft_Torque_Mat, obj.Speed_Mat, obj.Iron_Loss_Stator_Tooth_Mat);
+                [~,~,xStray_Load_Loss_Mat] = reInterpolateTable(obj.Shaft_Torque_Mat, obj.Speed_Mat, obj.Stray_Load_Loss_Mat);
+                [~,~,xMagnet_Loss_Mat] = reInterpolateTable(obj.Shaft_Torque_Mat, obj.Speed_Mat, obj.Magnet_Loss_Mat);
+                [~,~,xIron_Loss_Rotor_Pole_Mat] = reInterpolateTable(obj.Shaft_Torque_Mat, obj.Speed_Mat, obj.Iron_Loss_Rotor_Pole_Mat);
+                [~,~,xIron_Loss_Rotor_Back_Iron_Mat] = reInterpolateTable(obj.Shaft_Torque_Mat, obj.Speed_Mat, obj.Iron_Loss_Rotor_Back_Iron_Mat);
+                [~,~,xIron_Loss_Rotor_Tooth_Mat] = reInterpolateTable(obj.Shaft_Torque_Mat, obj.Speed_Mat, obj.Iron_Loss_Rotor_Tooth_Mat);
+                [~,~,xFriction_Loss_Mat] = reInterpolateTable(obj.Shaft_Torque_Mat, obj.Speed_Mat, obj.Friction_Loss_Mat);
+                [~,~,xWindage_Loss_Mat] = reInterpolateTable(obj.Shaft_Torque_Mat, obj.Speed_Mat, obj.Windage_Loss_Mat);  
+                [~,~,xStator_Copper_Loss_AC_Mat] = reInterpolateTable(obj.Shaft_Torque_Mat, obj.Speed_Mat, obj.Stator_Copper_Loss_AC_Mat);  
+                [~,~,xBanding_Loss_Mat] = reInterpolateTable(obj.Shaft_Torque_Mat, obj.Speed_Mat, obj.Banding_Loss_Mat);  
+                [~,~,xSleeve_Loss_Mat] = reInterpolateTable(obj.Shaft_Torque_Mat, obj.Speed_Mat, obj.Sleeve_Loss_Mat);
+            end
 
 
             % Get PowerLossDistributor params
@@ -1080,29 +1145,55 @@ classdef ThermalInterface < mcadinterface.BasicInterface
             romSubsysPath = strcat(modelName, '/',motName, '_ReducedOrderModel');
             add_block('built-in/Subsystem', romSubsysPath, ...
                 'Position', '[0,0,250,150]');
-            hLossMaps = add_block(strcat(obj.mcadROMLibName, '/LossMaps'), ...
-                strcat(romSubsysPath, '/Loss Maps from Motor-CAD Lab'), ...
-                'SpeedVec', 'SpeedVec', ...
-                'ShaftTorqueVec', 'ShaftTorqueVec', ...
-                'Stator_Copper_Loss_Mat', 'Stator_Copper_Loss_Mat', ...
-                'Rotor_Cage_Loss_Mat', 'Rotor_Cage_Loss_Mat', ...
-                'Iron_Loss_Stator_Back_Iron_Mat', 'Iron_Loss_Stator_Back_Iron_Mat', ...
-                'Iron_Loss_Stator_Tooth_Mat', 'Iron_Loss_Stator_Tooth_Mat', ...
-                'Stray_Loss_Stator_Iron_Proportion', 'Stray_Loss_Stator_Iron_Proportion', ...
-                'Stray_Load_Loss_Mat', 'Stray_Load_Loss_Mat', ...
-                'Magnet_Loss_Mat', 'Magnet_Loss_Mat', ...
-                'Iron_Loss_Rotor_Pole_Mat', 'Iron_Loss_Rotor_Pole_Mat', ...
-                'Iron_Loss_Rotor_Back_Iron_Mat', 'Iron_Loss_Rotor_Back_Iron_Mat', ...
-                'Iron_Loss_Rotor_Tooth_Mat', 'Iron_Loss_Rotor_Tooth_Mat', ...
-                'Friction_Loss_Mat', 'Friction_Loss_Mat', ...
-                'Windage_Loss_Mat', 'Windage_Loss_Mat', ...
-                'Stator_Copper_Loss_AC_Mat', 'Stator_Copper_Loss_AC_Mat', ...
-                'Banding_Loss_Mat', 'Banding_Loss_Mat', ...
-                'Sleeve_Loss_Mat', 'Sleeve_Loss_Mat' ...
-                );
+            hOutTnodes = add_block('simulink/Commonly Used Blocks/Out1', strcat(romSubsysPath, '/TempNodes'));
             hInTorque = add_block('simulink/Commonly Used Blocks/In1', strcat(romSubsysPath, '/ShaftTorque_Nm'));
             hInSpeed = add_block('simulink/Commonly Used Blocks/In1', strcat(romSubsysPath, '/ShaftSpeed_RPM')); 
-            hOutTnodes = add_block('simulink/Commonly Used Blocks/Out1', strcat(romSubsysPath, '/TempNodes'));
+            if numel(options.DCBusVoltage) > 1 % 3-D loss maps (LossMapsWithDCV)
+                hInVoltage = add_block('simulink/Commonly Used Blocks/In1', strcat(romSubsysPath, '/DCBusVoltage')); 
+                hLossMaps = add_block(strcat(obj.mcadROMLibName, '/LossMapsWithDCV'), ...
+                    strcat(romSubsysPath, '/Loss Maps from Motor-CAD Lab'), ...
+                    'DCBusVoltageVec', 'DCBusVoltageVec', ...
+                    'SpeedVec', 'SpeedVec', ...
+                    'ShaftTorqueVec', 'ShaftTorqueVec', ...
+                    'Stator_Copper_Loss_Mat', 'Stator_Copper_Loss_Mat', ...
+                    'Rotor_Cage_Loss_Mat', 'Rotor_Cage_Loss_Mat', ...
+                    'Iron_Loss_Stator_Back_Iron_Mat', 'Iron_Loss_Stator_Back_Iron_Mat', ...
+                    'Iron_Loss_Stator_Tooth_Mat', 'Iron_Loss_Stator_Tooth_Mat', ...
+                    'Stray_Loss_Stator_Iron_Proportion', 'Stray_Loss_Stator_Iron_Proportion', ...
+                    'Stray_Load_Loss_Mat', 'Stray_Load_Loss_Mat', ...
+                    'Magnet_Loss_Mat', 'Magnet_Loss_Mat', ...
+                    'Iron_Loss_Rotor_Pole_Mat', 'Iron_Loss_Rotor_Pole_Mat', ...
+                    'Iron_Loss_Rotor_Back_Iron_Mat', 'Iron_Loss_Rotor_Back_Iron_Mat', ...
+                    'Iron_Loss_Rotor_Tooth_Mat', 'Iron_Loss_Rotor_Tooth_Mat', ...
+                    'Friction_Loss_Mat', 'Friction_Loss_Mat', ...
+                    'Windage_Loss_Mat', 'Windage_Loss_Mat', ...
+                    'Stator_Copper_Loss_AC_Mat', 'Stator_Copper_Loss_AC_Mat', ...
+                    'Banding_Loss_Mat', 'Banding_Loss_Mat', ...
+                    'Sleeve_Loss_Mat', 'Sleeve_Loss_Mat' ...
+                    );
+            else  % 2-D loss maps (LossMapsWithDCV)
+                hLossMaps = add_block(strcat(obj.mcadROMLibName, '/LossMaps'), ...
+                    strcat(romSubsysPath, '/Loss Maps from Motor-CAD Lab'), ...
+                    'SpeedVec', 'SpeedVec', ...
+                    'ShaftTorqueVec', 'ShaftTorqueVec', ...
+                    'Stator_Copper_Loss_Mat', 'Stator_Copper_Loss_Mat', ...
+                    'Rotor_Cage_Loss_Mat', 'Rotor_Cage_Loss_Mat', ...
+                    'Iron_Loss_Stator_Back_Iron_Mat', 'Iron_Loss_Stator_Back_Iron_Mat', ...
+                    'Iron_Loss_Stator_Tooth_Mat', 'Iron_Loss_Stator_Tooth_Mat', ...
+                    'Stray_Loss_Stator_Iron_Proportion', 'Stray_Loss_Stator_Iron_Proportion', ...
+                    'Stray_Load_Loss_Mat', 'Stray_Load_Loss_Mat', ...
+                    'Magnet_Loss_Mat', 'Magnet_Loss_Mat', ...
+                    'Iron_Loss_Rotor_Pole_Mat', 'Iron_Loss_Rotor_Pole_Mat', ...
+                    'Iron_Loss_Rotor_Back_Iron_Mat', 'Iron_Loss_Rotor_Back_Iron_Mat', ...
+                    'Iron_Loss_Rotor_Tooth_Mat', 'Iron_Loss_Rotor_Tooth_Mat', ...
+                    'Friction_Loss_Mat', 'Friction_Loss_Mat', ...
+                    'Windage_Loss_Mat', 'Windage_Loss_Mat', ...
+                    'Stator_Copper_Loss_AC_Mat', 'Stator_Copper_Loss_AC_Mat', ...
+                    'Banding_Loss_Mat', 'Banding_Loss_Mat', ...
+                    'Sleeve_Loss_Mat', 'Sleeve_Loss_Mat' ...
+                    );
+            end
+            
             if isempty(coolingSystemsEnabled) % passive cooling
                 hIntpSs = add_block(strcat(obj.mcadROMLibName, '/InterpolatedStateSpaceThermalModel (LPV) (Passive Cooling)'), ...
                     strcat(romSubsysPath, '/nterpolatedStateSpaceThermalModel (LPV) (Passive Cooling)'), ...
@@ -1156,6 +1247,10 @@ classdef ThermalInterface < mcadinterface.BasicInterface
             hPowLossDistrPorts = get_param(hPowLossDistr, 'PortHandles');
             hIntpSsPorts = get_param(hIntpSs, 'PortHandles');
             hOutTnodesPort = get_param(hOutTnodes, 'PortHandles');
+            if numel(options.DCBusVoltage) > 1 % Voltage included
+                hInVoltagePort = get_param(hInVoltage, 'PortHandles');
+                add_line(romSubsysPath, hInVoltagePort.Outport, hLossMapsPorts.Inport(3));
+            end
             add_line(romSubsysPath, hInTorquePort.Outport, hLossMapsPorts.Inport(1));
             add_line(romSubsysPath, hInSpeedPort.Outport, hLossMapsPorts.Inport(2)); 
             add_line(romSubsysPath, hPowLossDistrPorts.Outport, hIntpSsPorts.Inport(1));
@@ -1186,6 +1281,9 @@ classdef ThermalInterface < mcadinterface.BasicInterface
             assignin(mdlWks,'TnodesInit', TnodesInit);
             assignin(mdlWks,'SpeedVec', SpeedVec);
             assignin(mdlWks,'ShaftTorqueVec', ShaftTorqueVec);
+            if numel(options.DCBusVoltage) > 1 % Voltage included
+                assignin(mdlWks,'DCBusVoltageVec', DCBusVoltageVec);
+            end
             assignin(mdlWks,'Stator_Copper_Loss_Mat', xStator_Copper_Loss_Mat);
             assignin(mdlWks,'Rotor_Cage_Loss_Mat', xRotor_Cage_Loss_Mat);
             assignin(mdlWks,'Iron_Loss_Stator_Back_Iron_Mat', xIron_Loss_Stator_Back_Iron_Mat);
@@ -1214,6 +1312,14 @@ classdef ThermalInterface < mcadinterface.BasicInterface
                 'Value', '2000');
             add_block('simulink/Sources/Constant', strcat(modelName, '/TorqueNm'), ...
                 'Value', '20');
+            if numel(options.DCBusVoltage) > 1 % Voltage included
+                add_block('simulink/Sources/Constant', strcat(modelName, '/DCBusVoltage'), ...
+                'Value', num2str(options.DCBusVoltage(end)));
+                add_line(modelName, strcat('DCBusVoltage', '/1'), strcat(motName, '_ReducedOrderModel', '/3'));
+                coolant2ROMInputPortNumberOffset = 3;
+            else
+                coolant2ROMInputPortNumberOffset = 2;
+            end
             add_line(modelName, strcat('TorqueNm', '/1'), strcat(motName, '_ReducedOrderModel', '/1'))
             add_line(modelName, strcat('SpeedRPM', '/1'), strcat(motName, '_ReducedOrderModel', '/2'))
             for idxCool = 1:numCoolSys
@@ -1227,7 +1333,7 @@ classdef ThermalInterface < mcadinterface.BasicInterface
                 add_block('simulink/Commonly Used Blocks/Mux', strcat(modelName, '/Mux', num2str(idxCool)));
                 add_line(modelName, strcat(frBlockName, '/1'), strcat('Mux', num2str(idxCool), '/1'))
                 add_line(modelName, strcat(TinBlockName, '/1'), strcat('Mux', num2str(idxCool), '/2'))
-                add_line(modelName, strcat('Mux', num2str(idxCool), '/1'), strcat(motName, '_ReducedOrderModel', '/', num2str(2+idxCool)));               
+                add_line(modelName, strcat('Mux', num2str(idxCool), '/1'), strcat(motName, '_ReducedOrderModel', '/', num2str(coolant2ROMInputPortNumberOffset+idxCool)));               
             end
 
             % add scopes and outport to the ROM subsystem outputs
@@ -1726,8 +1832,9 @@ function idxsCell = getNestedForLoopIdxs(arraySizeVec)
 end
 
 function [xVec, yVec, zgMat] = reInterpolateTable(xsMat, ysMat, zsMat)
-        % Re-interpolate scattered map into square grid
+        % Re-interpolate 2D scattered map into square grid
 
+        warning('off', 'MATLAB:scatteredInterpolant:DupPtsAvValuesWarnId'); % suppress this unimportant warning temporarily
         zInterpolant = scatteredInterpolant(xsMat(:), ysMat(:), zsMat(:), 'linear', 'nearest');
         xMin = min(xsMat(:));
         xMax = max(xsMat(:));
@@ -1739,6 +1846,7 @@ function [xVec, yVec, zgMat] = reInterpolateTable(xsMat, ysMat, zsMat)
         yVec = linspace(yMin, yMax, yLen);
         [xgrid, ygrid] = ndgrid(xVec, yVec);
         zgMat = zInterpolant(xgrid, ygrid);
+        warning('on', 'MATLAB:scatteredInterpolant:DupPtsAvValuesWarnId'); % re-enable the warning
 
 end
 
