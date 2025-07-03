@@ -298,14 +298,14 @@ classdef tThermalInterface < matlab.unittest.TestCase
                 'BlownOver_Enable did not retain the assigned value');
         
             % 2) Assign non-default test values
-            flowRate_mps  = 123.45;   % flow velocity 123.45 m/s
+            flowVelocity_mps  = 123.45;   % flow velocity 123.45 m/s
             inletT_degC    = 22.5;    % °C
         
-            test.objectUnderTest.BlownOver_FlowRate_mps = flowRate_mps;
+            test.objectUnderTest.BlownOver_FlowVelocity_mps = flowVelocity_mps;
             test.objectUnderTest.BlownOver_InletTemperature_degC = inletT_degC;
         
             % 3) Round-trip assertions
-            test.verifyEqual(test.objectUnderTest.BlownOver_FlowRate_mps, flowRate_mps, ...
+            test.verifyEqual(test.objectUnderTest.BlownOver_FlowVelocity_mps, flowVelocity_mps, ...
                 'BlownOver_FlowRate_m3ps did not retain the assigned value');
             test.verifyEqual(test.objectUnderTest.BlownOver_InletTemperature_degC, inletT_degC, ...
                 'BlownOver_InletTemperature_degC did not retain the assigned value');

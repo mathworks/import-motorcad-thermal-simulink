@@ -58,7 +58,8 @@ classdef ThermalInterface < mcadinterface.BasicInterface
     properties(Constant)
         % List of supported cooling systems
         SupportedCoolingSystemsMcadNames = ...
-                    {'Ventilated'; ...
+                    {'Blown Over'; ...
+                     'Ventilated'; ...
                      'Housing Water Jacket'; ...
                      'Shaft Spiral Groove'; ...
                      'Wet Rotor'; ...
@@ -364,26 +365,30 @@ classdef ThermalInterface < mcadinterface.BasicInterface
         
             % 1) Split out the spray-cooling groups as needed:
             postProcessedGroups = splitSprayCoolingGroups(obj);
+
+            % 2) Add the Blown-Over cooling
+            postProcessedGroups{end+1,1} = 'Blown Over';
+            postProcessedGroups{end,2} = [0, 0]; % inlet=ambient, outlet=ambient. Mcad ambient index is always 0
             
-            % 2) Now filter them by the supported names:
+            % 3) Now filter them by the supported names:
             groupNames = postProcessedGroups(:,1);
             isSupported = contains(groupNames, obj.SupportedCoolingSystemsMcadNames);
             
             obj.CoolingSystemNamesAndMcadIdxes = postProcessedGroups(isSupported,:);
             
-            % 3) Figure out which systems are actually "enabled" in the final object.
+            % 4) Figure out which systems are actually "enabled" in the final object.
             obj.EnabledCoolingSystems = contains(obj.SupportedCoolingSystemsMcadNames, ...
                                                  obj.CoolingSystemNamesAndMcadIdxes(:,1));
             
             numSuppCoolSys = length(obj.SupportedCoolingSystemsMcadNames);
             obj.CoolingSystemsDigraphs = struct();
             
-            % 4) Build each coolant's directed graph
+            % 5) Build each coolant's directed graph
             for idxSuppCoolSys = 1:numSuppCoolSys
                 isEnabled = obj.EnabledCoolingSystems(idxSuppCoolSys);
                 coolantName = obj.SupportedCoolingSystemsMcadNames{idxSuppCoolSys};
         
-                if isEnabled
+                if isEnabled && not(strcmp(coolantName, 'Blown Over'))
                     [digG, nodeInfo] = obj.getDigraphForCoolantGroup(coolantName, false);
                     obj.CoolingSystemsDigraphs(idxSuppCoolSys).Digraph              = digG;
                     obj.CoolingSystemsDigraphs(idxSuppCoolSys).NodeNamesAndArrayIdx = nodeInfo;
@@ -393,7 +398,7 @@ classdef ThermalInterface < mcadinterface.BasicInterface
                 end
             end
         
-            % 5) Finally assemble global adjacency plus inlet/outlet indices
+            % 6) Finally assemble global adjacency plus inlet/outlet indices
             [A, inletsCell, outletsCell, coolantIdxs] = getAdjacencyMatAndInletOutletIdxs(obj);
             obj.AdjacencyMat     = A;
             obj.InletArrayIdxs   = inletsCell;    % cell array, one cell per enabled system
@@ -809,10 +814,16 @@ classdef ThermalInterface < mcadinterface.BasicInterface
         
             for iSys = 1:nEnabled
                 idxCoolSys = IdxsEnabledCoolSys(iSys);
-        
+                if strcmp(obj.SupportedCoolingSystemsMcadNames{idxCoolSys}, 'Blown Over')
+                    % Blown Over is a special case: inlet and outlet is the Ambient node
+                    ambientMcadIdx = 0; % in MotorCAD, ambient node always has index = 0
+                    ambientArrayIdx = find([obj.NodeNamesAndMcadIdx{:,2}]==ambientMcadIdx);
+                    InletArrayIdxsCell{iSys} = ambientArrayIdx;
+                    OutletArrayIdxsCell{iSys} = ambientArrayIdx;
+                end
                 thisDigraphStruct = obj.CoolingSystemsDigraphs(idxCoolSys);
                 thisDigraph = thisDigraphStruct.Digraph;
-                if isempty(thisDigraph) 
+                if isempty(thisDigraph)
                     % system not enabled or no nodes
                     continue;
                 end
@@ -907,7 +918,11 @@ classdef ThermalInterface < mcadinterface.BasicInterface
                 thisCoolingSys = coolingSystemsEnabled{idxCoolingSys};
                 enablePropName = strcat(erase(thisCoolingSys, ' '), '_Enable');
                 obj.(enablePropName) = 1;
-                frPropNames{idxCoolingSys} = strcat(erase(thisCoolingSys, ' '), '_FlowRate_m3ps');
+                if strcmp(thisCoolingSys, 'Blown Over')
+                    frPropNames{idxCoolingSys} = 'BlownOver_FlowVelocity_mps';
+                else
+                    frPropNames{idxCoolingSys} = strcat(erase(thisCoolingSys, ' '), '_FlowRate_m3ps');
+                end
                 if any(startsWith(obj.MultiNozzleSprayCoolingSystems, string(thisCoolingSys))) % multi-nozzle cooling (Front and Rear)
                     obj.SprayCooling_Enable          = int32(1); % turn on the spray cooling system
                     obj.SprayCoolingNozzleDefinition = int32(1); % turn on multi-nozzle
@@ -1015,17 +1030,23 @@ classdef ThermalInterface < mcadinterface.BasicInterface
                     idxFr = idxCool+1;
                     idxTin = idxCool+numCoolSys+1;
                     frVal = frBkpts(bkptIdxsComb(idxFr));
-                    disp("  " + coolingSystemsEnabled{idxCool} + " flow rate = " + frVal + " lpm");
-                    obj.(frPropNames{idxCool}) = frVal/60/1000;
+                    thisCoolingSystem = coolingSystemsEnabled{idxCool};
+                    if strcmp(thisCoolingSystem, 'Blown Over')
+                        disp("  " + thisCoolingSystem + " flow velocity = " + frVal + " m/s");
+                        obj.(frPropNames{idxCool}) = frVal;
+                    else
+                        disp("  " + thisCoolingSystem + " flow rate = " + frVal + " lpm");
+                        obj.(frPropNames{idxCool}) = frVal/60/1000;
+                    end
                     TinVal = TinBkpts(bkptIdxsComb(idxTin));
                     if iscell(TinPropNames{idxCool}) % multi-nozzle (F and R)
                         TinMultiNozzlePropNames = TinPropNames{idxCool};
-                        disp("  " + coolingSystemsEnabled{idxCool} +" F inlet temperature = " + TinVal + " degC");
+                        disp("  " + thisCoolingSystem +" F inlet temperature = " + TinVal + " degC");
                         obj.(TinMultiNozzlePropNames{1}) = TinVal;
-                        disp("  " + coolingSystemsEnabled{idxCool} +" R inlet temperature = " + TinVal + " degC");
+                        disp("  " + thisCoolingSystem +" R inlet temperature = " + TinVal + " degC");
                         obj.(TinMultiNozzlePropNames{2}) = TinVal;
                     else
-                        disp("  " + coolingSystemsEnabled{idxCool} +" inlet temperature = " + TinVal + " degC");
+                        disp("  " + thisCoolingSystem +" inlet temperature = " + TinVal + " degC");
                         obj.(TinPropNames{idxCool}) = TinVal;
                     end
                 end

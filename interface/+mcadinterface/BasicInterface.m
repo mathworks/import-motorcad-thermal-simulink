@@ -176,7 +176,7 @@ classdef BasicInterface < mcadinterface.AbstractInterface
             ... % Cooling system variables -------
             ... % Blown-Over OR Natural Convection choice
             'BlownOver_Enable'; ...
-            'BlownOver_FlowRate_mps'; ... % blown-over uses flow velocity (m/s) instead of flow rate (m^3/s)
+            'BlownOver_FlowVelocity_mps'; ... % blown-over uses flow velocity (m/s) instead of flow rate (m^3/s)
             'BlownOver_InletTemperature_degC'; ...
             ... % Ventilated
             'Ventilated_Enable'; ...
@@ -265,7 +265,7 @@ classdef BasicInterface < mcadinterface.AbstractInterface
         RotorCopperStrayLoadLossesVaryWithTemp (1,1) int32  % Enable rotor copper stray load loss variation with temperature
         ... % Cooling system variables -----------------------------------
         BlownOver_Enable (1,1) int32     % Enable "Blown-Over" cooling system. If disabled, natural convection is used instead.
-        BlownOver_FlowRate_mps (1,1) double % Flow velocity [m/s]
+        BlownOver_FlowVelocity_mps (1,1) double % Flow velocity [m/s]
         BlownOver_InletTemperature_degC (1,1) double % Inlet temperature [degC]
         Ventilated_Enable (1,1) int32     % Enable "Ventilated" cooling system
         Ventilated_FlowRate_m3ps (1,1) double % Flow rate [m3/s]
@@ -638,9 +638,9 @@ classdef BasicInterface < mcadinterface.AbstractInterface
             obj.BlownOver_Enable = value;
         end
 
-        function set.BlownOver_FlowRate_mps(obj, value)
-            obj.setParameter('BlownOver_FlowRate_mps', value);
-            obj.BlownOver_FlowRate_mps = value;
+        function set.BlownOver_FlowVelocity_mps(obj, value)
+            obj.setParameter('BlownOver_FlowVelocity_mps', value);
+            obj.BlownOver_FlowVelocity_mps = value;
         end
 
         function set.BlownOver_InletTemperature_degC(obj, value)
