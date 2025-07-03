@@ -287,6 +287,31 @@ classdef tThermalInterface < matlab.unittest.TestCase
             test.verifyEqual(test.objectUnderTest.Spray_AxialEndcap_InletTemperature_R_degC, 33.0);
         end
 
+        function testBlownOverCoolingSystemOptions(test)
+            % Verify that the BlownOver cooling system can be enabled
+            % and that its flow-rate and inlet-temperature inputs can be
+            % set and read back unaltered.
+        
+            % 1) Enable the cooling system
+            test.objectUnderTest.BlownOver_Enable = 1;
+            test.verifyEqual(test.objectUnderTest.BlownOver_Enable, int32(1), ...
+                'BlownOver_Enable did not retain the assigned value');
+        
+            % 2) Assign non-default test values
+            flowRate_mps  = 123.45;   % flow velocity 123.45 m/s
+            inletT_degC    = 22.5;    % °C
+        
+            test.objectUnderTest.BlownOver_FlowRate_mps = flowRate_mps;
+            test.objectUnderTest.BlownOver_InletTemperature_degC = inletT_degC;
+        
+            % 3) Round-trip assertions
+            test.verifyEqual(test.objectUnderTest.BlownOver_FlowRate_mps, flowRate_mps, ...
+                'BlownOver_FlowRate_m3ps did not retain the assigned value');
+            test.verifyEqual(test.objectUnderTest.BlownOver_InletTemperature_degC, inletT_degC, ...
+                'BlownOver_InletTemperature_degC did not retain the assigned value');
+        end
+
+
         function testGenerateSimulinkReducedOrderModel(test)
             % Test for generateSimulinkReducedOrderModel method.
             % Checks that the generated model data is consistent, and checks

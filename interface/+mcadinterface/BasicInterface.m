@@ -56,7 +56,11 @@ classdef BasicInterface < mcadinterface.AbstractInterface
             'RotorIronStrayLoadLossesVaryWithTemp'; ...
             'StatorCopperStrayLoadLossesVaryWithTemp'; ...
             'RotorCopperStrayLoadLossesVaryWithTemp'; ...
-            ... % Cooling system variables -------           
+            ... % Cooling system variables -------
+            ... % Blown-Over OR Natural Convection choice
+            'Cooling_Type'; ...
+            'Forced_Conv_Default_Velocity'; ... % blown-over uses flow velocity instead of flow rate
+            'Ambient_Temperature'; ... % blown-over inlet temperature = Ambient temperature
             ... % Ventilated
             'Through_Ventilation'; ...
             'SelfVentilation'; ...
@@ -169,6 +173,11 @@ classdef BasicInterface < mcadinterface.AbstractInterface
             'RotorIronStrayLoadLossesVaryWithTemp'; ...
             'StatorCopperStrayLoadLossesVaryWithTemp'; ...
             'RotorCopperStrayLoadLossesVaryWithTemp'; ...
+            ... % Cooling system variables -------
+            ... % Blown-Over OR Natural Convection choice
+            'BlownOver_Enable'; ...
+            'BlownOver_FlowRate_mps'; ... % blown-over uses flow velocity (m/s) instead of flow rate (m^3/s)
+            'BlownOver_InletTemperature_degC'; ...
             ... % Ventilated
             'Ventilated_Enable'; ...
             'Ventilated_Enable2'; ...
@@ -254,7 +263,10 @@ classdef BasicInterface < mcadinterface.AbstractInterface
         RotorIronStrayLoadLossesVaryWithTemp (1,1) int32  % Enable rotor iron stray load loss variation with temperature
         StatorCopperStrayLoadLossesVaryWithTemp (1,1) int32 % Enable stator copper stray load loss variation with temperature
         RotorCopperStrayLoadLossesVaryWithTemp (1,1) int32  % Enable rotor copper stray load loss variation with temperature
-        ... % Cooling system variables
+        ... % Cooling system variables -----------------------------------
+        BlownOver_Enable (1,1) int32     % Enable "Blown-Over" cooling system. If disabled, natural convection is used instead.
+        BlownOver_FlowRate_mps (1,1) double % Flow velocity [m/s]
+        BlownOver_InletTemperature_degC (1,1) double % Inlet temperature [degC]
         Ventilated_Enable (1,1) int32     % Enable "Ventilated" cooling system
         Ventilated_FlowRate_m3ps (1,1) double % Flow rate [m3/s]
         Ventilated_InletTemperature_degC (1,1) double % Inlet temperature [degC]
@@ -270,7 +282,7 @@ classdef BasicInterface < mcadinterface.AbstractInterface
         SprayCooling_Enable (1,1) int32  % Enable "Spray Cooling" cooling system
         SprayCooling_FlowRate_m3ps (1,1) double % Flow rate [m3/s]
         SprayCooling_InletTemperature_degC (1,1) double % Inlet temperature [degC]
-        % Multi-Nozzle Spray Cooling Settings ---------------
+        % Multi-Nozzle Spray Cooling Settings ----
         SprayCoolingNozzleDefinition (1,1) int32
         Spray_RadialHousing_Enable (1,1) logical
         Spray_RadialHousing_FlowRate_m3ps (1,1) double
@@ -287,13 +299,14 @@ classdef BasicInterface < mcadinterface.AbstractInterface
         Spray_AxialEndcap_FlowProportion_F (1,1) double
         Spray_AxialEndcap_InletTemperature_F_degC (1,1) double
         Spray_AxialEndcap_InletTemperature_R_degC (1,1) double
-        % ------------------------------------------------------
+        % ----------------------------------------
         RotorWaterJacket_Enable (1,1) int32 % Enable "Rotor Water Jacket" cooling system
         RotorWaterJacket_FlowRate_m3ps (1,1) double % Flow rate [m3/s]
         RotorWaterJacket_InletTemperature_degC (1,1) double % Inlet temperature [degC]
         SlotWaterJacket_Enable (1,1) int32  % Enable "Slot Water Jacket" cooling system
         SlotWaterJacket_FlowRate_m3ps (1,1) double % Flow rate [m3/s]
         SlotWaterJacket_InletTemperature_degC (1,1) double % Inlet temperature [degC]
+        ... % ------------------------------------------------------------
         ... % Calculation settings
         ThermalSteadyOrTransientChoice (1,1) int32 % Choice for steady-state or transient calculation
         TransientOption (1,1) int32         % Transient option selector
@@ -619,6 +632,21 @@ classdef BasicInterface < mcadinterface.AbstractInterface
         end
 
         % Cooling systems -----
+
+        function set.BlownOver_Enable(obj, value)
+            obj.setParameter('BlownOver_Enable', value); 
+            obj.BlownOver_Enable = value;
+        end
+
+        function set.BlownOver_FlowRate_mps(obj, value)
+            obj.setParameter('BlownOver_FlowRate_mps', value);
+            obj.BlownOver_FlowRate_mps = value;
+        end
+
+        function set.BlownOver_InletTemperature_degC(obj, value)
+            obj.setParameter('BlownOver_InletTemperature_degC', value);
+            obj.BlownOver_InletTemperature_degC = value;
+        end
 
         function set.Ventilated_Enable(obj, value)
             obj.setParameter('Ventilated_Enable', value); 
