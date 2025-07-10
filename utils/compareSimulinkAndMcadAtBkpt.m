@@ -1,140 +1,124 @@
-function maxTempError = compareSimulinkAndMcadAtBkpt(modelName, mcadIntf, bkptIdxComb, torqueVal)
-    % COMPARESIMULINKANDMCADATBKPT returns the maximum temperature absolute
-    % difference between Simulink and Motor-CAD in a transient simulation 
-    % with specified torque, at a particular combination of breakpoints.
-    % It also plots the two simulations superimposed.
-    %
-    % Input arguments:
-    % - modelName: [string/char]: model name of the SROTM, previously generated
-    % with generateSimulinkReducedOrderModel
-    % - mcadIntf: [mcadinterface.ThermalInterface object]: pre-loaded ThermalInterface object
-    % - bkptIdxComb: [int]: Array of breakpoint indices of speed, flow
-    % rate, and inlet temperature to use for the comparison.
-    % - torqueVal: [double]: Value of shaft torque for the comparison.
-    % Output arguments:
-    % - maxTempError: [double]: max(abs(Tsrotm-Tmcad)) where Tsimulink
-    % is the SROTM node temperatures and Tmcad is the Motor-CAD node
-    % temperature, in the transient simulation.
+function maxTempError = compareSimulinkAndMcadAtBkpt(modelName, mcadIntf, coolingSystemsEnabled, bkptIdxComb, torqueVal)
+%   COMPARESIMULINKANDMCADATBKPT
+%
+%   Works with an arbitrary list of cooling systems supplied in
+%   COOLINGSYSTEMSENABLED.   The first element in BKPTIDXCOMB is always the
+%   speed index; every cooling branch then contributes *two* indices
+%   (flow-rate, inlet-temperature) in the same order as
+%   COOLINGSYSTEMSENABLED.
+%
+%   Copyright 2022-2025 The MathWorks, Inc.
 
-    % Copyright 2022-2025 The MathWorks, Inc.
-    
-    mdlWks = get_param(modelName,'ModelWorkspace');
-    StateSpaceND = mdlWks.getVariable('StateSpaceND');
-    samplingGrid = StateSpaceND.SamplingGrid;
+%% --- basic checks -------------------------------------------------------
+nSys          = numel(coolingSystemsEnabled);
+expectedLen   = 1 + 2*nSys;          % 1 speed  + 2 per system
+assert(numel(bkptIdxComb)==expectedLen, ...
+    "bkptIdxComb must contain %d indices (1 speed + 2 per cooling system).",expectedLen);
 
-    % Obtain Simulink results ------------------------------------------
-    if length(bkptIdxComb)==3 % one cooling system - e5_IM_HWJ case
-        wBkpts = squeeze(samplingGrid.w(:,1,1))';
-        fr1Bkpts = squeeze(samplingGrid.fr1(1,:,1));
-        Tin1Bkpts = squeeze(samplingGrid.Tin1(1,1,:))';
-        rpmVal = wBkpts(bkptIdxComb(1));
-        fr1Val = fr1Bkpts(bkptIdxComb(2));
-        Tin1Val = Tin1Bkpts(bkptIdxComb(3));
-        set_param(strcat(modelName, '/HousingWaterJacket_Flowrate_lpm'), 'Value', num2str(fr1Val));
-        set_param(strcat(modelName, '/HousingWaterJacket_InletTemp_degC'), 'Value', num2str(Tin1Val));
-    elseif length(bkptIdxComb)==5 % two cooling systems - e8_IPMSM_HWJandVent case
-        wBkpts = squeeze(samplingGrid.w(:,1,1,1,1))';
-        fr1Bkpts = squeeze(samplingGrid.fr1(1,:,1,1,1));
-        fr2Bkpts = squeeze(samplingGrid.fr2(1,1,:,1,1))';
-        Tin1Bkpts = squeeze(samplingGrid.Tin1(1,1,1,:,1))';
-        Tin2Bkpts = squeeze(samplingGrid.Tin2(1,1,1,1,:))';
-        rpmVal = wBkpts(bkptIdxComb(1));
-        fr1Val = fr1Bkpts(bkptIdxComb(2));       
-        fr2Val = fr2Bkpts(bkptIdxComb(3));
-        Tin1Val = Tin1Bkpts(bkptIdxComb(4));
-        Tin2Val = Tin2Bkpts(bkptIdxComb(5));
-        set_param(strcat(modelName, '/HousingWaterJacket_Flowrate_lpm'), 'Value', num2str(fr1Val));
-        set_param(strcat(modelName, '/HousingWaterJacket_InletTemp_degC'), 'Value', num2str(Tin1Val));
-        set_param(strcat(modelName, '/Ventilated_Flowrate_lpm'), 'Value', num2str(fr2Val));
-        set_param(strcat(modelName, '/Ventilated_InletTemp_degC'), 'Value', num2str(Tin2Val));
-    elseif length(bkptIdxComb)==7 % three cooling systems - e8_IPMSM_SprayMultiNozzle case
-        wBkpts = squeeze(samplingGrid.w(:,1,1,1,1,1,1))';
-        fr1Bkpts = squeeze(samplingGrid.fr1(1,:,1,1,1,1,1)); 
-        Tin1Bkpts = squeeze(samplingGrid.Tin1(1,1,:,1,1,1,1))'; 
-        fr2Bkpts = squeeze(samplingGrid.fr2(1,1,1,:,1,1,1))'; 
-        Tin2Bkpts = squeeze(samplingGrid.Tin2(1,1,1,1,:,1,1))'; 
-        fr3Bkpts = squeeze(samplingGrid.fr3(1,1,1,1,1,:,1))'; 
-        Tin3Bkpts = squeeze(samplingGrid.Tin3(1,1,1,1,1,1,:))'; 
-        rpmVal = wBkpts(bkptIdxComb(1));
-        fr1Val = fr1Bkpts(bkptIdxComb(2));       
-        fr2Val = fr2Bkpts(bkptIdxComb(3));
-        fr3Val = fr3Bkpts(bkptIdxComb(4));
-        Tin1Val = Tin1Bkpts(bkptIdxComb(5));
-        Tin2Val = Tin2Bkpts(bkptIdxComb(6));
-        Tin3Val = Tin3Bkpts(bkptIdxComb(7));
-        set_param(strcat(modelName, '/Spray_RadialHousing_Flowrate_lpm'), 'Value', num2str(fr1Val));
-        set_param(strcat(modelName, '/Spray_RadialHousing_InletTemp_degC'), 'Value', num2str(Tin1Val));
-        set_param(strcat(modelName, '/HousingWaterJacket_Flowrate_lpm'), 'Value', num2str(fr2Val));
-        set_param(strcat(modelName, '/HousingWaterJacket_InletTemp_degC'), 'Value', num2str(Tin2Val));
-        set_param(strcat(modelName, '/Spray_RadialRotor_Flowrate_lpm'), 'Value', num2str(fr3Val));
-        set_param(strcat(modelName, '/Spray_RadialRotor_InletTemp_degC'), 'Value', num2str(Tin3Val));
-    end
+%% --- grab sampling grid from model workspace ---------------------------
+mdlWks        = get_param(modelName,'ModelWorkspace');
+SSND          = mdlWks.getVariable('StateSpaceND');
+SG            = SSND.SamplingGrid;
 
-    set_param(strcat(modelName, '/TorqueNm'), 'Value', num2str(torqueVal));
-    set_param(strcat(modelName, '/SpeedRPM'), 'Value', num2str(rpmVal));
-    
-    stopTime = 1000; % s
-    out = sim(modelName, 'StopTime', num2str(stopTime));
-    TnodesSeries = out.yout{1}.Values;
-    TnodesInit = mdlWks.getVariable('TnodesInit');
+% helpers
+getVec  = @(field) unique(SG.(field)(:))';            % collapse N-D array
+mkName  = @(s) regexprep(s,'[^A-Za-z0-9_]','');       % "Housing Water Jacket" → "HousingWaterJacket", "Spray_RadialRotor" → "Spray_RadialRotor", etc.
 
-    % Obtain Motor-CAD baseline ------------------------------------------
-    mcadIntf.Tambient_degC = TnodesInit(1);
-    mcadIntf.Shaft_Speed_RPM = rpmVal;
-    if length(bkptIdxComb)==3 % one cooling system - e5_IM_HWJ case
-        mcadIntf.HousingWaterJacket_FlowRate_m3ps = fr1Val/60/1000; % lpm to m3ps
-        mcadIntf.HousingWaterJacket_InletTemperature_degC = Tin1Val;
-    elseif length(bkptIdxComb)==5 % two cooling systems - e8_IPMSM_HWJandVent case
-        mcadIntf.HousingWaterJacket_FlowRate_m3ps = fr1Val/60/1000; % lpm to m3ps
-        mcadIntf.HousingWaterJacket_InletTemperature_degC = Tin1Val;
-        mcadIntf.Ventilated_FlowRate_m3ps = fr2Val/60/1000; % lpm to m3ps
-        mcadIntf.Ventilated_InletTemperature_degC = Tin2Val;
-    elseif length(bkptIdxComb)==7 % three cooling systems - e8_IPMSM_SprayMultiNozzle case
-        mcadIntf.Spray_RadialHousing_FlowRate_m3ps = fr1Val/60/1000; % lpm to m3ps
-        mcadIntf.Spray_RadialHousing_InletTemperature_F_degC = Tin1Val;
-        mcadIntf.Spray_RadialHousing_InletTemperature_R_degC = Tin1Val;
-        mcadIntf.HousingWaterJacket_FlowRate_m3ps = fr2Val/60/1000; % lpm to m3ps
-        mcadIntf.HousingWaterJacket_InletTemperature_degC = Tin2Val;
-        mcadIntf.Spray_RadialRotor_FlowRate_m3ps = fr3Val/60/1000; % lpm to m3ps
-        mcadIntf.Spray_RadialRotor_InletTemperature_F_degC = Tin3Val;
-        mcadIntf.Spray_RadialRotor_InletTemperature_R_degC = Tin3Val;
-    end
+%% --- map indices → physical values -------------------------------------
+rpmIdx         = bkptIdxComb(1);
+rpmVec         = getVec('w');
+rpmVal         = rpmVec(rpmIdx);
 
-    mcadIntf.EnableStatorTempCoeffRes = 1;
-    mcadIntf.EnableRotorTempCoeffRes = 1;
-    mcadIntf.updateModel();    
-    numTimeSteps = 50;
-    mcadIntf.runThermalTransientWithSpecifiedTorqueSpeed(torqueVal, rpmVal, stopTime, numTimeSteps)
-    allMcadIdxs = [mcadIntf.NodeNamesAndMcadIdx{:,2}];
-    [tVecMcad, TnodesMcad] = mcadIntf.getTransientTemperatureForNodeMcadIdxs(allMcadIdxs);
+flowVals  = zeros(1,nSys);
+tempVals  = zeros(1,nSys);
+blkBases  = cell (1,nSys);
 
-    % Plot results ------------------------------------------------------
-    TnodesMcadSeries = timeseries(TnodesMcad', tVecMcad);
-    [TnodesMcadSeries,TnodesSeries] = synchronize(TnodesMcadSeries,TnodesSeries,'Union');
-    TnodesMcadSeries.Name = 'Motor-CAD';
-    TnodesSeries.Name = 'Simulink';
+for k = 1:nSys
+    blkBases{k}   = mkName(coolingSystemsEnabled{k});
 
-    TnodesError = squeeze(TnodesSeries.Data)'-TnodesMcadSeries.Data;  
-    TnodesError(TnodesSeries.Time < stopTime/10,:) = []; % Ignore initial transient i.e. initial 1/10th of simulation
-    maxTempError = max(abs(TnodesError(:)));
+    flowVec       = getVec(sprintf('fr%d',k));
+    tempVec       = getVec(sprintf('Tin%d',k));
 
-    figure();
-    h1 = plot(TnodesSeries, 'b');
-    hold on
-    h2 = plot(TnodesMcadSeries, 'r--');
-    hold off
-    legend([h1(1), h2(1)], {'Simulink', 'Motor-CAD'});
-    if length(bkptIdxComb)==3
-        title(strcat('w = ', num2str(rpmVal), ...
-            ' rpm, fr = ', num2str(fr1Val), ' lpm, Tin = ', num2str(Tin1Val), ' degC'));
-    elseif length(bkptIdxComb)==5
-        title(strcat('w = ', num2str(rpmVal), ...
-            ' rpm, fr1 = ', num2str(fr1Val), ' lpm, fr2 = ', num2str(fr2Val), ...
-            ' lpm, Tin1 = ', num2str(Tin1Val), ' degC, Tin2 = ', num2str(Tin2Val), ' degC'));
-    end
-    ylabel('Node temperatures [degC]');
-    xlabel('Time [s]'); 
-    grid on
-    
+    flowVals(k)   = flowVec(bkptIdxComb(1+2*(k-1)+1));
+    tempVals(k)   = tempVec(bkptIdxComb(1+2*(k-1)+2));
 end
 
+%% --- feed values into Simulink -----------------------------------------
+set_param([modelName '/SpeedRPM'],  'Value',num2str(rpmVal));
+set_param([modelName '/TorqueNm'],  'Value',num2str(torqueVal));
+
+for k = 1:nSys
+    blk = blkBases{k};
+    set_param([modelName '/' blk '_FlowRate_lpm'   ],'Value',num2str(flowVals(k)));
+    set_param([modelName '/' blk '_InletTemp_degC' ],'Value',num2str(tempVals(k)));
+end
+
+stopTime = 1000;                           % [s]
+out      = sim(modelName,'StopTime',num2str(stopTime));
+
+TnodesSeries  = out.yout{1}.Values;        % Simulink temperatures
+TnodesInit    = mdlWks.getVariable('TnodesInit');
+
+%% --- configure & run Motor-CAD -----------------------------------------
+mcadIntf.Tambient_degC      = TnodesInit(1);
+mcadIntf.Shaft_Speed_RPM    = rpmVal;
+
+for k = 1:nSys
+    base            = blkBases{k};
+    % Most Motor-CAD models use “…FlowRate_m3ps” / “…InletTemperature_degC”.
+    % (Falls back to "…FlowVelocity_mps" if needed.)
+    propFlow        = sprintf('%s_FlowRate_m3ps',base);
+    if isprop(mcadIntf,propFlow)
+        mcadIntf.(propFlow) = flowVals(k)/60/1000; % lpm → m³/s
+    else
+        propFlow = sprintf('%s_FlowVelocity_mps',base);
+        mcadIntf.(propFlow) = flowVals(k); % m/s
+    end
+    propTin = sprintf('%s_InletTemperature_degC',base);
+    if isprop(mcadIntf,propTin)
+        mcadIntf.(propTin) = tempVals(k);
+    else
+        % multi-nozzle, with Front and Rear - set both
+        propTinF = sprintf('%s_InletTemperature_F_degC',base);
+        mcadIntf.(propTinF) = tempVals(k);
+        propTinR = sprintf('%s_InletTemperature_R_degC',base);
+        mcadIntf.(propTinR) = tempVals(k);
+    end
+end
+
+mcadIntf.EnableStatorTempCoeffRes = 1;
+mcadIntf.EnableRotorTempCoeffRes  = 1;
+mcadIntf.updateModel();
+
+numTimeSteps = 50;
+mcadIntf.runThermalTransientWithSpecifiedTorqueSpeed( ...
+    torqueVal,rpmVal,stopTime,numTimeSteps);
+
+allMcadIdxs   = [mcadIntf.NodeNamesAndMcadIdx{:,2}];
+[tVecMcad,Tmcad] = mcadIntf.getTransientTemperatureForNodeMcadIdxs(allMcadIdxs);
+
+%% --- error calculation & visualisation ----------------------------------
+TmcadSeries = timeseries(Tmcad',tVecMcad);  TmcadSeries.Name = 'Motor-CAD';
+[TsMcad,TsSL] = synchronize(TmcadSeries,TnodesSeries,'Union');
+
+err  = squeeze(TsSL.Data)' - TsMcad.Data;
+err(TsSL.Time < stopTime/10,:) = [];        % ignore “warm-up” phase
+maxTempError = max(abs(err(:)));
+
+figure;
+plot(TsSL ,'b'); hold on;
+plot(TsMcad,'r--'); grid on;
+legend('Simulink','Motor-CAD','Location','best');
+title(composeTitle(rpmVal,flowVals,tempVals,coolingSystemsEnabled));
+ylabel('Temperature [°C]'); xlabel('Time [s]');
+
+end  % --------------------------------------------------------------------
+
+%% helper: dynamic plot title
+function txt = composeTitle(rpm,flw,tmp,sys)
+    parts = ["w = " + rpm + " rpm"];
+    for i = 1:numel(sys)
+        parts(end+1) = sprintf('%s: %.2g lpm / %.2g °C',sys{i},flw(i),tmp(i));
+    end
+    txt = strjoin(parts,', ');
+end

@@ -1345,7 +1345,7 @@ classdef ThermalInterface < mcadinterface.BasicInterface
             add_line(modelName, strcat('SpeedRPM', '/1'), strcat(motName, '_ReducedOrderModel', '/2'))
             for idxCool = 1:numCoolSys
                 thisCoolingSys = coolingSystemsEnabled{idxCool};
-                frBlockName = strcat(erase(thisCoolingSys, ' '), '_Flowrate_lpm');
+                frBlockName = strcat(erase(thisCoolingSys, ' '), '_FlowRate_lpm');
                 TinBlockName = strcat(erase(thisCoolingSys, ' '), '_InletTemp_degC');
                 add_block('simulink/Sources/Constant', strcat(modelName, '/', frBlockName), ...
                 'Value', '3');
